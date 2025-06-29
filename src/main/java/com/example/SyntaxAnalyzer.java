@@ -8,15 +8,17 @@ public class SyntaxAnalyzer {
     private List<Token> tokens;
     private int currentTokenIndex;
     private Token currentToken;
-    private List<String> syntaxLog; // To log rules and errors
+    private List<String> syntaxLog;
     private TablaDeSimbolos tablaDeSimbolos;
+    private List<ErrorCompilacion> erroresSintacticos;
 
     public SyntaxAnalyzer(List<Token> tokens) {
         this.tokens = tokens;
         this.currentTokenIndex = 0;
         this.currentToken = tokens.isEmpty() ? null : tokens.get(0);
         this.syntaxLog = new ArrayList<>();
-        this.tablaDeSimbolos = new TablaDeSimbolos(); // Instanciar la tabla de símbolos
+        this.tablaDeSimbolos = new TablaDeSimbolos();
+        this.erroresSintacticos = new ArrayList<>();
     }
 
     public TablaDeSimbolos getTablaDeSimbolos() {
@@ -66,28 +68,61 @@ public class SyntaxAnalyzer {
     }
 
     private void reportError(String message) {
-        String errorLine = (currentToken != null) ? String.valueOf(currentToken.getLineNumber()) : "N/A";
-        String logMessage = "Error Sintáctico (Línea " + errorLine + "): " + message;
-        syntaxLog.add(logMessage);
-        System.err.println(logMessage);
+        int linea = (currentToken != null) ? currentToken.getLineNumber() : (tokens.isEmpty() ? 0 : tokens.get(tokens.size()-1).getLineNumber());
+        int columna = (currentToken != null) ? currentToken.getColumnNumber() : 0;
+        String lexema = (currentToken != null) ? currentToken.getLexeme() : "EOF";
+
+        ErrorCompilacion error = new ErrorCompilacion(
+            ErrorCompilacion.TipoError.SINTACTICO,
+            message,
+            linea,
+            columna,
+            lexema
+        );
+        erroresSintacticos.add(error);
+        syntaxLog.add(error.toString()); // Also add to general log for chronological view if desired
     }
 
     private void logRule(String ruleMessage) {
         String logMessage = "Regla/Acción Sintáctica: " + ruleMessage;
         syntaxLog.add(logMessage);
-        System.out.println(logMessage);
+        // System.out.println(logMessage); // Reduce console noise, Main will print errors.
     }
 
     public List<String> getSyntaxLog() {
         return syntaxLog;
     }
 
+    public List<ErrorCompilacion> getErroresSintacticos() {
+        return erroresSintacticos;
+    }
+
     public void parse() {
         logRule("Iniciando análisis sintáctico...");
-        if (tokens.isEmpty() || currentToken == null) {
-            logRule("No hay tokens para analizar o se llegó al final inesperadamente.");
-            return;
+        if (tokens.isEmpty() || currentToken == null && !tokens.isEmpty() && tokens.get(0).getType() == TokenType.COMMENT && tokens.size() == 1 ) {
+            // Special case: if only comments, it's fine, but currentToken might be null if last token was a comment.
+            // Or if tokens list is empty to begin with.
+             boolean onlyComments = true;
+             if(tokens.isEmpty()){
+                 logRule("No hay tokens para analizar.");
+                 return;
+             }
+             for(Token t : tokens){
+                 if(t.getType() != TokenType.COMMENT){
+                     onlyComments = false;
+                     break;
+                 }
+             }
+             if(onlyComments){
+                 logRule("El código solo contiene comentarios o está vacío.");
+                 return;
+             }
+             if(currentToken == null && !tokens.isEmpty()){ // If not only comments but currentToken is null
+                 reportError("Se llegó al final del archivo inesperadamente antes de iniciar el análisis del programa.");
+                 return;
+             }
         }
+
         parsePrograma();
 
         if (currentToken != null) {

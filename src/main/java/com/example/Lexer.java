@@ -10,6 +10,7 @@ import java.util.Map;
 public class Lexer {
 
     private static final Map<TokenType, String> tokenPatterns = new LinkedHashMap<>();
+    private List<ErrorCompilacion> erroresLexicos;
 
     static {
         // Order is important for matching. Comments and keywords should generally take precedence.
@@ -38,40 +39,43 @@ public class Lexer {
     }
 
     public List<Token> analyze(String code) {
+        this.erroresLexicos = new ArrayList<>();
         List<Token> tokens = new ArrayList<>();
-        String remainingCode = code;
-        int currentGlobalPos = 0; // Tracks global position in the original code string
+        // String remainingCode = code; // We will use code.substring(currentGlobalPos) directly
+        int currentGlobalPos = 0;
         int currentLine = 1;
-        // currentColumn is 1-based, for error reporting. Calculated from currentGlobalPos and lineStartPos.
-        int lineStartGlobalPos = 0; // Global position where the current line started
+        int lineStartGlobalPos = 0; // Global position in 'code' where the current line started
 
         while (currentGlobalPos < code.length()) {
+            int currentColumn = currentGlobalPos - lineStartGlobalPos + 1;
             boolean matchFound = false;
-            // int currentColumn = currentGlobalPos - lineStartGlobalPos + 1; // For more detailed error reporting
+            String sliceToMatch = code.substring(currentGlobalPos);
 
             for (Map.Entry<TokenType, String> entry : tokenPatterns.entrySet()) {
                 TokenType type = entry.getKey();
                 String patternString = entry.getValue();
 
                 Pattern pattern = Pattern.compile("^" + patternString);
-                Matcher matcher = pattern.matcher(remainingCode);
+                Matcher matcher = pattern.matcher(sliceToMatch);
 
                 if (matcher.lookingAt()) {
                     String lexeme = matcher.group(0);
-                    int lexemeStartLine = currentLine;
+                    // int lexemeStartLine = currentLine; // currentLine is already the start line
+                    // int lexemeStartColumn = currentColumn; // currentColumn is already the start column
 
                     if (type != TokenType.COMMENT) {
-                        tokens.add(new Token(type, lexeme, patternString, lexemeStartLine));
+                        tokens.add(new Token(type, lexeme, patternString, currentLine, currentColumn));
                     }
 
+                    // Advance global position and update line/column based on lexeme content
                     for (int i = 0; i < lexeme.length(); i++) {
                         if (lexeme.charAt(i) == '\n') {
                             currentLine++;
-                            lineStartGlobalPos = currentGlobalPos + i + 1;
+                            lineStartGlobalPos = currentGlobalPos + i + 1; // Update lineStart based on original code string pos
                         }
                     }
                     currentGlobalPos += lexeme.length();
-                    remainingCode = code.substring(currentGlobalPos);
+                    // remainingCode = code.substring(currentGlobalPos); // Not needed if using sliceToMatch
                     matchFound = true;
                     break;
                 }
@@ -80,8 +84,8 @@ public class Lexer {
             if (!matchFound) {
                 // Try to match whitespace if no token was found
                 Pattern whitespacePattern = Pattern.compile("^[\\s]+");
-                Matcher whitespaceMatcher = whitespacePattern.matcher(remainingCode);
-                if (whitespaceMatcher.find()) {
+                Matcher whitespaceMatcher = whitespacePattern.matcher(sliceToMatch);
+                if (whitespaceMatcher.lookingAt()) { // Use lookingAt for consistency
                     String ws = whitespaceMatcher.group(0);
                     for (int i = 0; i < ws.length(); i++) {
                         if (ws.charAt(i) == '\n') {
@@ -90,11 +94,22 @@ public class Lexer {
                         }
                     }
                     currentGlobalPos += ws.length();
-                    remainingCode = code.substring(currentGlobalPos);
+                    // remainingCode = code.substring(currentGlobalPos);
                 } else {
                     // If not a token and not whitespace, it's a lexical error
-                    char errorChar = remainingCode.charAt(0);
-                     tokens.add(new Token(TokenType.ERROR, String.valueOf(errorChar), "Caracter no reconocido", currentLine));
+                    char errorChar = sliceToMatch.charAt(0);
+                    String errorLexeme = String.valueOf(errorChar);
+                    String errorMessage = "Caracter no reconocido: '" + errorLexeme + "'";
+
+                    erroresLexicos.add(new ErrorCompilacion(
+                        ErrorCompilacion.TipoError.LEXICO,
+                        errorMessage,
+                        currentLine,
+                        currentColumn,
+                        errorLexeme));
+                    // Still add an ERROR token for now, Main.java might use it.
+                    // This could be removed if Main switches to only using ErrorCompilacion list.
+                    tokens.add(new Token(TokenType.ERROR, errorLexeme, "Error Léxico", currentLine, currentColumn));
 
                     // Advance past the error character
                     if (errorChar == '\n') { // Should be caught by whitespace, but as a safeguard
@@ -102,11 +117,14 @@ public class Lexer {
                         lineStartGlobalPos = currentGlobalPos + 1;
                     }
                     currentGlobalPos++;
-                    remainingCode = code.substring(currentGlobalPos);
+                    // remainingCode = code.substring(currentGlobalPos);
                 }
             }
         }
         return tokens;
     }
-    // Removed the countNewlines helper as its logic is integrated above.
+
+    public List<ErrorCompilacion> getErroresLexicos() {
+        return erroresLexicos;
+    }
 }
