@@ -1,0 +1,42 @@
+CODIGO,COMPONENTE,DESCRIPCIÓN
+100,Si,Palabra reservada
+101,SiNo,Palabra reservada
+102,FinSi,Palabra reservada
+103,Mientras,Palabra reservada
+104,FinMientras,Palabra reservada
+105,Repetir,Palabra reservada
+106,HastaQue,Palabra reservada
+107,Escribir,Palabra reservada
+108,Leer,Palabra reservada
+109,Definir,Palabra reservada
+110,Como,Palabra reservada
+111,Inicio,Palabra reservada
+112,Fin,Palabra reservada
+113,Segun,Palabra reservada
+114,FinSegun,Palabra reservada
+115,Caso,Palabra reservada
+116,De,Palabra reservada
+117,Funcion,Palabra reservada
+118,FinFuncion,Palabra reservada
+119,Entonces,Palabra reservada
+120,Hacer,Palabra reservada
+201,+,Operador
+202,-,Operador
+203,*,Operador
+204,/,Operador
+205,=,Operador
+206,<,Operador
+207,>,Operador
+208,<=,Operador
+209,>=,Operador
+210,<>,Operador
+211,No,Operador
+212,Y,Operador
+213,O,Operador
+301,(,Delimitador
+302,),Delimitador
+303,:,Delimitador
+304,",Delimitador
+400,Identificador,Identificador
+500,123,Número
+501,3.14,Número
