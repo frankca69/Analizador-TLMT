@@ -52,6 +52,10 @@ public class Main {
             // long syntaxErrorCount = syntaxLog.stream().filter(log -> log.startsWith("Error Sintáctico")).count();
             // System.out.println("\nTotal de errores sintácticos encontrados: " + syntaxErrorCount);
 
+            // --- Mostrar Tabla de Símbolos ---
+            TablaDeSimbolos tabla = syntaxAnalyzer.getTablaDeSimbolos();
+            tabla.imprimirTabla();
+
         } else {
             System.out.println("\n\n--- Análisis Sintáctico Omitido ---");
             System.out.println("No se procederá con el análisis sintáctico debido a errores léxicos previos.");

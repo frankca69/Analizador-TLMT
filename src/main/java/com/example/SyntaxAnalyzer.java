@@ -9,12 +9,18 @@ public class SyntaxAnalyzer {
     private int currentTokenIndex;
     private Token currentToken;
     private List<String> syntaxLog; // To log rules and errors
+    private TablaDeSimbolos tablaDeSimbolos;
 
     public SyntaxAnalyzer(List<Token> tokens) {
         this.tokens = tokens;
         this.currentTokenIndex = 0;
         this.currentToken = tokens.isEmpty() ? null : tokens.get(0);
         this.syntaxLog = new ArrayList<>();
+        this.tablaDeSimbolos = new TablaDeSimbolos(); // Instanciar la tabla de símbolos
+    }
+
+    public TablaDeSimbolos getTablaDeSimbolos() {
+        return tablaDeSimbolos;
     }
 
     private void advance() {
@@ -47,10 +53,6 @@ public class SyntaxAnalyzer {
     private void expect(TokenType expectedType, String errorMessage) {
         if (!match(expectedType)) {
             reportError(errorMessage + ". Se encontró: " + (currentToken != null ? currentToken.getType() + " ('" + currentToken.getLexeme() + "')" : "FIN DE ARCHIVO"));
-            // Basic error recovery: advance to next token to allow further parsing attempts,
-            // but this can lead to cascaded errors. More sophisticated recovery is complex.
-            // For now, we might just stop or try to find a semicolon or known statement keyword.
-            // For this initial design, we'll let it try to continue, but errors might cascade.
         }
     }
 
@@ -63,29 +65,26 @@ public class SyntaxAnalyzer {
         }
     }
 
-
     private void reportError(String message) {
         String errorLine = (currentToken != null) ? String.valueOf(currentToken.getLineNumber()) : "N/A";
         String logMessage = "Error Sintáctico (Línea " + errorLine + "): " + message;
         syntaxLog.add(logMessage);
-        System.err.println(logMessage); // Also print to stderr for immediate visibility
-        // Potentially throw an exception or set an error flag
+        System.err.println(logMessage);
     }
 
     private void logRule(String ruleMessage) {
         String logMessage = "Regla/Acción Sintáctica: " + ruleMessage;
         syntaxLog.add(logMessage);
-        System.out.println(logMessage); // Print to stdout for visibility of rules
+        System.out.println(logMessage);
     }
 
     public List<String> getSyntaxLog() {
         return syntaxLog;
     }
 
-    // Main parsing method to be called
     public void parse() {
         logRule("Iniciando análisis sintáctico...");
-        if (tokens.isEmpty() || currentToken == null) { // Check currentToken as well
+        if (tokens.isEmpty() || currentToken == null) {
             logRule("No hay tokens para analizar o se llegó al final inesperadamente.");
             return;
         }
@@ -97,22 +96,34 @@ public class SyntaxAnalyzer {
         logRule("Análisis sintáctico completado.");
     }
 
-    // <programa> ::= "Proceso" IDENTIFICADOR <bloque_sentencias> "FinProceso"
     private void parsePrograma() {
         logRule("Analizando <programa>");
         expectKeyword("Proceso", "Se esperaba la palabra reservada 'Proceso'");
+
+        Token nombreProcesoToken = currentToken;
+        if (nombreProcesoToken != null && nombreProcesoToken.getType() == TokenType.IDENTIFIER) {
+            Simbolo procSimbolo = new Simbolo(
+                nombreProcesoToken.getLexeme(),
+                "N/A",
+                "nombre_proceso",
+                "global",
+                nombreProcesoToken.getLineNumber(),
+                null);
+            if (!tablaDeSimbolos.agregar(procSimbolo)) {
+                reportError("Error interno al agregar nombre de proceso a tabla de símbolos.");
+            }
+            tablaDeSimbolos.setAlcanceActual("global");
+            logRule("Nombre del proceso '" + nombreProcesoToken.getLexeme() + "' agregado a la tabla de símbolos. Alcance actual: " + tablaDeSimbolos.getAlcanceActual());
+        }
         expect(TokenType.IDENTIFIER, "Se esperaba un IDENTIFICADOR para el nombre del proceso");
+
         parseBloqueSentencias();
         expectKeyword("FinProceso", "Se esperaba la palabra reservada 'FinProceso'");
         logRule("Fin <programa>");
     }
 
-    // <bloque_sentencias> ::= <sentencia>*
-    // This will try to parse sentences until a keyword that cannot start a sentence is found,
-    // or until a token indicating end of block (like FinProceso, FinSi, SiNo etc.) is found.
     private void parseBloqueSentencias() {
         logRule("Analizando <bloque_sentencias>");
-        // Loop while the current token can start a known sentence or is not an end-of-block marker
         while (currentToken != null && canStartSentencia(currentToken) && !isEndOfBlockMarker(currentToken)) {
             parseSentencia();
         }
@@ -122,40 +133,34 @@ public class SyntaxAnalyzer {
     private boolean canStartSentencia(Token token) {
         if (token == null) return false;
         if (token.getType() == TokenType.KEYWORD) {
-            String lexeme = token.getLexeme().toLowerCase(); // PSeInt keywords are case-insensitive
+            String lexeme = token.getLexeme().toLowerCase();
             switch (lexeme) {
                 case "definir":
                 case "leer":
                 case "escribir":
                 case "si":
-                // case "mientras": // etc.
                     return true;
             }
         } else if (token.getType() == TokenType.IDENTIFIER) {
-            // Could be an assignment or procedure call (not implemented yet)
             return true;
         }
         return false;
     }
 
     private boolean isEndOfBlockMarker(Token token) {
-        if (token == null) return true; // End of file is an end of block
+        if (token == null) return true;
         if (token.getType() == TokenType.KEYWORD) {
             String lexeme = token.getLexeme().toLowerCase();
             switch (lexeme) {
                 case "finproceso":
                 case "finsi":
                 case "sino":
-                // case "finmientras":
-                // case "hastaque":
-                // case "finsegun":
                     return true;
             }
         }
         return false;
     }
 
-    // <sentencia> ::= <sent_definir> | <sent_leer> | <sent_escribir> | <sent_asignacion> | <sent_si>
     private void parseSentencia() {
         logRule("Analizando <sentencia>");
         if (currentToken == null) {
@@ -180,44 +185,72 @@ public class SyntaxAnalyzer {
                     break;
                 default:
                     reportError("Palabra clave no reconocida o no esperada para iniciar una sentencia: " + currentToken.getLexeme());
-                    advance(); // Consume the unexpected token to try to recover
+                    advance();
             }
         } else if (currentToken.getType() == TokenType.IDENTIFIER) {
-            // Could be an assignment. A lookahead might be needed if procedure calls were allowed without a keyword.
-            // For now, assume IDENTIFIER at start of statement is assignment.
             parseSentenciaAsignacion();
         } else {
             reportError("Sentencia inválida. Se encontró: " + currentToken.getLexeme());
-            advance(); // Consume to prevent infinite loop on unhandled token
+            advance();
         }
         logRule("Fin <sentencia>");
     }
 
-    // <sent_definir> ::= "Definir" <lista_variables> "Como" <tipo_dato> ";"
     private void parseSentenciaDefinir() {
         logRule("Analizando <sent_definir>");
         expectKeyword("Definir", "Se esperaba 'Definir'");
-        parseListaVariables();
+        List<Token> variablesDefinidas = parseListaVariables();
         expectKeyword("Como", "Se esperaba 'Como' en la definición");
-        parseTipoDato();
-        expect(TokenType.DELIMITER, "Se esperaba ';' al final de la sentencia Definir"); // PSeInt uses ;
+        Token tipoDatoToken = parseTipoDato();
+
+        if (tipoDatoToken != null) {
+            for (Token varToken : variablesDefinidas) {
+                Simbolo varSimbolo = new Simbolo(
+                    varToken.getLexeme(),
+                    tipoDatoToken.getLexeme(),
+                    "variable",
+                    tablaDeSimbolos.getAlcanceActual(),
+                    varToken.getLineNumber(),
+                    null
+                );
+                if (!tablaDeSimbolos.agregar(varSimbolo)) {
+                    reportError("Variable '" + varToken.getLexeme() + "' ya definida en el alcance '" + tablaDeSimbolos.getAlcanceActual() + "'. Línea: " + varToken.getLineNumber());
+                } else {
+                    logRule("Variable '" + varToken.getLexeme() + "' ("+tipoDatoToken.getLexeme()+") agregada a la tabla de símbolos.");
+                }
+            }
+        }
+        expect(TokenType.DELIMITER, "Se esperaba ';' al final de la sentencia Definir");
         logRule("Fin <sent_definir>");
     }
 
-    // <lista_variables> ::= IDENTIFICADOR ("," IDENTIFICADOR)*
-    private void parseListaVariables() {
+    private List<Token> parseListaVariables() {
         logRule("Analizando <lista_variables>");
-        expect(TokenType.IDENTIFIER, "Se esperaba un IDENTIFICADOR de variable");
+        List<Token> variables = new ArrayList<>();
+
+        if (currentToken != null && currentToken.getType() == TokenType.IDENTIFIER) {
+            variables.add(currentToken);
+            advance();
+        } else {
+            expect(TokenType.IDENTIFIER, "Se esperaba un IDENTIFICADOR de variable inicial");
+        }
+
         while (currentToken != null && currentToken.getType() == TokenType.DELIMITER && currentToken.getLexeme().equals(",")) {
-            match(TokenType.DELIMITER); // Consume ","
-            expect(TokenType.IDENTIFIER, "Se esperaba un IDENTIFICADOR de variable después de la coma");
+            match(TokenType.DELIMITER);
+            if (currentToken != null && currentToken.getType() == TokenType.IDENTIFIER) {
+                variables.add(currentToken);
+                advance();
+            } else {
+                expect(TokenType.IDENTIFIER, "Se esperaba un IDENTIFICADOR de variable después de la coma");
+            }
         }
         logRule("Fin <lista_variables>");
+        return variables;
     }
 
-    // <tipo_dato> ::= "Entero" | "Real" | "Caracter" | "Logico" | "Cadena"
-    private void parseTipoDato() {
+    private Token parseTipoDato() {
         logRule("Analizando <tipo_dato>");
+        Token tipoToken = null;
         if (currentToken != null && currentToken.getType() == TokenType.KEYWORD) {
             String lexeme = currentToken.getLexeme().toLowerCase();
             switch (lexeme) {
@@ -227,38 +260,34 @@ public class SyntaxAnalyzer {
                 case "logico":
                 case "cadena":
                     logRule("Tipo de dato reconocido: " + currentToken.getLexeme());
-                    advance(); // Consume type keyword
+                    tipoToken = currentToken;
+                    advance();
                     break;
                 default:
-                    // PSeInt is also flexible allowing IDENTIFIER as type (e.g. for arrays/custom not handled yet)
-                    // For now, strictly keywords.
-                     reportError("Tipo de dato no reconocido: " + currentToken.getLexeme());
+                     reportError("Tipo de dato keyword no reconocido: " + currentToken.getLexeme());
             }
-        } else if (currentToken != null && currentToken.getType() == TokenType.IDENTIFIER) {
-            // PSeInt allows any identifier as a type, often for arrays or user-defined (not supported yet)
-            // For simplicity, we can allow IDENTIFIER here but log it.
-            // Or be strict and only allow keyword types for now.
-            // Let's be strict for now as per BNF.
-            // To be more PSeInt-like, one might just consume IDENTIFIER here.
-            reportError("Se esperaba una palabra clave de tipo de dato (Entero, Real, etc.), pero se encontró IDENTIFICADOR: " + currentToken.getLexeme());
-            // advance(); // Optionally consume it if we want to be more lenient or if IDENTIFIER types are valid.
-        }
-        else {
-            reportError("Se esperaba un tipo de dato (Entero, Real, etc.)");
+        } else {
+            reportError("Se esperaba una palabra clave de tipo de dato (Entero, Real, etc.). Encontrado: " +
+                        (currentToken != null ? currentToken.getType() + " ('" + currentToken.getLexeme() + "')" : "FIN DE ARCHIVO"));
         }
         logRule("Fin <tipo_dato>");
+        return tipoToken;
     }
 
-    // <sent_leer> ::= "Leer" <lista_variables> ";"
     private void parseSentenciaLeer() {
         logRule("Analizando <sent_leer>");
         expectKeyword("Leer", "Se esperaba 'Leer'");
-        parseListaVariables();
+        List<Token> variablesLeidas = parseListaVariables();
+        for (Token varToken : variablesLeidas) {
+            Simbolo s = tablaDeSimbolos.buscarConPrioridad(varToken.getLexeme(), tablaDeSimbolos.getAlcanceActual());
+            if (s == null) {
+                reportError("Variable '" + varToken.getLexeme() + "' no ha sido definida. Línea: " + varToken.getLineNumber());
+            }
+        }
         expect(TokenType.DELIMITER, "Se esperaba ';' al final de la sentencia Leer");
         logRule("Fin <sent_leer>");
     }
 
-    // <sent_escribir> ::= "Escribir" <lista_expresiones> ";"
     private void parseSentenciaEscribir() {
         logRule("Analizando <sent_escribir>");
         expectKeyword("Escribir", "Se esperaba 'Escribir'");
@@ -267,26 +296,32 @@ public class SyntaxAnalyzer {
         logRule("Fin <sent_escribir>");
     }
 
-    // <lista_expresiones> ::= <expresion> ("," <expresion>)*
     private void parseListaExpresiones() {
         logRule("Analizando <lista_expresiones>");
-        parseExpresion(); // Parse the first expression
+        parseExpresion();
         while (currentToken != null && currentToken.getType() == TokenType.DELIMITER && currentToken.getLexeme().equals(",")) {
-            match(TokenType.DELIMITER); // Consume ","
-            parseExpresion(); // Parse subsequent expressions
+            match(TokenType.DELIMITER);
+            parseExpresion();
         }
         logRule("Fin <lista_expresiones>");
     }
 
-    // <sent_asignacion> ::= IDENTIFICADOR ( "<-" | "=" ) <expresion> ";"
     private void parseSentenciaAsignacion() {
         logRule("Analizando <sent_asignacion>");
+        Token variableAsignada = currentToken;
         expect(TokenType.IDENTIFIER, "Se esperaba un IDENTIFICADOR para la asignación");
+
+        if (variableAsignada != null && variableAsignada.getType() == TokenType.IDENTIFIER) {
+            Simbolo s = tablaDeSimbolos.buscarConPrioridad(variableAsignada.getLexeme(), tablaDeSimbolos.getAlcanceActual());
+            if (s == null) {
+                reportError("Variable '" + variableAsignada.getLexeme() + "' no ha sido definida. Línea: " + variableAsignada.getLineNumber());
+            }
+        }
 
         if (currentToken != null && currentToken.getType() == TokenType.OPERATOR &&
             (currentToken.getLexeme().equals("<-") || currentToken.getLexeme().equals("="))) {
             logRule("Operador de asignación reconocido: " + currentToken.getLexeme());
-            advance(); // Consume "<-" or "="
+            advance();
         } else {
             reportError("Se esperaba '<-' o '=' para la asignación. Encontrado: " +
                         (currentToken != null ? currentToken.getLexeme() : "FIN DE ARCHIVO"));
@@ -296,72 +331,52 @@ public class SyntaxAnalyzer {
         logRule("Fin <sent_asignacion>");
     }
 
-    // --- Expresiones (muy simplificado por ahora) ---
-    // <expresion> ::= <expresion_simple> ( (<op_relacional> | <op_logico>) <expresion_simple> )*
-    // For now, an expression will just be a single factor to keep it simple.
-    // This needs proper expansion for operators and precedence.
     private void parseExpresion() {
         logRule("Analizando <expresion>");
         parseExpresionSimple();
-
-        // Loop for relational and logical operators (simplified)
         while (currentToken != null && currentToken.getType() == TokenType.OPERATOR &&
                isRelationalOrLogicalOperator(currentToken.getLexeme())) {
             logRule("Operador relacional/lógico reconocido: " + currentToken.getLexeme());
-            advance(); // Consume the operator
-            parseExpresionSimple(); // Parse the right-hand side operand
+            advance();
+            parseExpresionSimple();
         }
         logRule("Fin <expresion>");
     }
 
     private boolean isRelationalOrLogicalOperator(String lexeme) {
-        // TODO: This should be more robust, perhaps checking specific lexemes from the grammar
-        // For now, any operator not covered by arithmetic might be considered (this is too broad)
-        // Let's list them explicitly as per our simplified grammar:
-        switch (lexeme.toLowerCase()) { // PSeInt operators can be case insensitive like Y, O, NO
-            case ">":
-            case "<":
-            case ">=":
-            case "<=":
-            case "==": // Standard PSeInt equality
-            case "=":  // Also used for equality in PSeInt expressions
-            case "<>":
-            case "y":  // Logical AND
-            case "o":  // Logical OR
-            // case "no": // Unary, handled in factor
+        switch (lexeme.toLowerCase()) {
+            case ">": case "<": case ">=": case "<=": case "==":
+            case "=": case "<>": case "y": case "o":
                 return true;
             default:
                 return false;
         }
     }
 
-    // <expresion_simple> ::= <termino> ( ("+" | "-") <termino> )*
     private void parseExpresionSimple() {
         logRule("Analizando <expresion_simple>");
         parseTermino();
         while (currentToken != null && currentToken.getType() == TokenType.OPERATOR &&
                (currentToken.getLexeme().equals("+") || currentToken.getLexeme().equals("-"))) {
             logRule("Operador aditivo/sustractivo reconocido: " + currentToken.getLexeme());
-            advance(); // Consume "+" or "-"
+            advance();
             parseTermino();
         }
         logRule("Fin <expresion_simple>");
     }
 
-    // <termino> ::= <factor> ( ("*" | "/") <factor> )*
     private void parseTermino() {
         logRule("Analizando <termino>");
         parseFactor();
         while (currentToken != null && currentToken.getType() == TokenType.OPERATOR &&
                (currentToken.getLexeme().equals("*") || currentToken.getLexeme().equals("/"))) {
             logRule("Operador multiplicativo/divisivo reconocido: " + currentToken.getLexeme());
-            advance(); // Consume "*" or "/"
+            advance();
             parseFactor();
         }
         logRule("Fin <termino>");
     }
 
-    // <factor> ::= IDENTIFICADOR | NUMERO_ENTERO | NUMERO_REAL | CADENA_LITERAL | "(" <expresion> ")" | ...
     private void parseFactor() {
         logRule("Analizando <factor>");
         if (currentToken == null) {
@@ -370,39 +385,53 @@ public class SyntaxAnalyzer {
         }
         switch (currentToken.getType()) {
             case IDENTIFIER:
-            case NUMBER: // Covers Entero y Real based on Lexer
+                Token idToken = currentToken;
+                Simbolo s = tablaDeSimbolos.buscarConPrioridad(idToken.getLexeme(), tablaDeSimbolos.getAlcanceActual());
+                if (s == null) {
+                    reportError("Variable '" + idToken.getLexeme() + "' no ha sido definida. Línea: " + idToken.getLineNumber());
+                }
+                logRule("Factor reconocido: " + idToken.getType() + " ('" + idToken.getLexeme() + "')");
+                advance();
+                break;
+            case NUMBER:
             case STRING:
                 logRule("Factor reconocido: " + currentToken.getType() + " ('" + currentToken.getLexeme() + "')");
-                advance(); // Consume the token
+                advance();
                 break;
+            case KEYWORD:
+                 if (currentToken.getLexeme().equalsIgnoreCase("verdadero") || currentToken.getLexeme().equalsIgnoreCase("falso")) {
+                    logRule("Factor reconocido (valor lógico): " + currentToken.getLexeme());
+                    advance();
+                 } else {
+                    reportError("Palabra clave inesperada como factor: " + currentToken.getLexeme());
+                 }
+                 break;
             case DELIMITER:
                 if (currentToken.getLexeme().equals("(")) {
-                    match(TokenType.DELIMITER); // Consume "("
-                    parseExpresion(); // Recursive call for parenthesized expression
-                    expect(TokenType.DELIMITER, "Se esperaba ')' para cerrar la expresión"); // Expect ")"
+                    match(TokenType.DELIMITER);
+                    parseExpresion();
+                    expect(TokenType.DELIMITER, "Se esperaba ')' para cerrar la expresión");
                 } else {
                     reportError("Factor inesperado: Se encontró el delimitador '" + currentToken.getLexeme() + "'");
                 }
                 break;
-            // TODO: Add TRUE, FALSE, unary operators like NOT, -, +
             default:
                 reportError("Factor inesperado: " + currentToken.getType() + " ('" + currentToken.getLexeme() + "')");
-                // advance(); // Optionally consume to try to recover, but might hide other errors
+                break;
         }
-        logRule("Fin <factor> (simplificado)");
+        logRule("Fin <factor>");
     }
 
-    // <sent_si> ::= "Si" <expresion> "Entonces" <bloque_sentencias> ("SiNo" <bloque_sentencias>)? "FinSi"
     private void parseSentenciaSi() {
         logRule("Analizando <sent_si>");
         expectKeyword("Si", "Se esperaba 'Si'");
-        parseExpresion(); // Condition
+        parseExpresion();
         expectKeyword("Entonces", "Se esperaba 'Entonces' después de la condición del Si");
-        parseBloqueSentencias(); // Block for "Entonces"
+        parseBloqueSentencias();
 
         if (currentToken != null && currentToken.getType() == TokenType.KEYWORD && currentToken.getLexeme().equalsIgnoreCase("SiNo")) {
-            matchKeyword("SiNo"); // Consume "SiNo"
-            parseBloqueSentencias(); // Block for "SiNo"
+            matchKeyword("SiNo");
+            parseBloqueSentencias();
         }
 
         expectKeyword("FinSi", "Se esperaba 'FinSi' para cerrar la estructura Si");
