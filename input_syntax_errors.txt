@@ -1,0 +1,21 @@
+Proceso PruebaErroresSintacticos
+  Definir a Como Entero // Error: Falta punto y coma
+  Definir b, c Como Real;
+
+  Leer x; // Error: x no definida
+  a <- 10 + ; // Error: Expresión incompleta
+  Escribir b c; // Error: Falta coma entre expresiones
+
+  Si a > 5 // Error: Falta Entonces
+    Escribir "a es mayor";
+  FinSi
+
+  Definir y Como Logico
+  y <- Verdadero;
+  Si y Entonces
+    // Bloque vacío intencional, pero estructura Si correcta
+  // Error: Falta FinSi aquí para el Si anterior si no hay SiNo
+  // Para probar error de FinProceso inesperado:
+  // FinSi // Comentado para que FinProceso llegue antes de lo esperado.
+
+FinProceso // Debería detectar el Si sin cerrar si el FinSi de arriba está comentado
