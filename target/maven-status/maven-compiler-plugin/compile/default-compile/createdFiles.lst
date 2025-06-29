@@ -1,4 +1,6 @@
-com/example/Token.class
-com/example/Main.class
 com/example/Lexer.class
+com/example/Token.class
+com/example/SyntaxAnalyzer.class
+com/example/SyntaxAnalyzer$1.class
+com/example/Main.class
 com/example/TokenType.class

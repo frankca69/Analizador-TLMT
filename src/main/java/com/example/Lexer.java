@@ -17,7 +17,8 @@ public class Lexer {
         tokenPatterns.put(TokenType.COMMENT, "//.*");
 
         // Palabras reservadas (case-insensitive for Pseint)
-        tokenPatterns.put(TokenType.KEYWORD, "(?i)\\b(Si|Entonces|SiNo|FinSi|Mientras|Hacer|FinMientras|Repetir|HastaQue|Escribir|Leer|Definir|Como|Inicio|Fin|Segun|FinSegun|Caso|De|Funcion|FinFuncion)\\b");
+        // Added Proceso, FinProceso and data types
+        tokenPatterns.put(TokenType.KEYWORD, "(?i)\\b(Proceso|FinProceso|Si|Entonces|SiNo|FinSi|Mientras|Hacer|FinMientras|Repetir|HastaQue|Escribir|Leer|Definir|Como|Inicio|Fin|Segun|FinSegun|Caso|De|Funcion|FinFuncion|Entero|Real|Caracter|Logico|Cadena|Verdadero|Falso)\\b");
 
         // Cadenas de texto (delimitadas por comillas simples o dobles), with escape support
         tokenPatterns.put(TokenType.STRING, "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'");

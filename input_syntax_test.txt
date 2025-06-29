@@ -1,0 +1,22 @@
+Proceso PruebaSintacticaRefinada
+  Definir a, b, resultado Como Entero;
+  Definir condicion Como Logico;
+
+  Leer a, b;
+  resultado <- a + b;
+  condicion <- a > b;
+
+  Escribir "Resultado: ", resultado;
+  Escribir "Condicion: ", condicion;
+
+  Si condicion Entonces
+    Escribir "A es mayor que B, o iguales.";
+  SiNo
+    Escribir "A es menor que B.";
+  FinSi
+
+  Si a == b Entonces
+    Escribir "A y B son iguales.";
+  FinSi
+
+FinProceso
