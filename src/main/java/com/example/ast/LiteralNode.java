@@ -6,18 +6,6 @@ import com.example.TokenType;
 public class LiteralNode implements NodoAST { // Podría ser también un NodoExpresion
     private Token token; // El token NUMBER, STRING, o KEYWORD (Verdadero/Falso)
 
-    public LiteralNode(Token token) {
-        // El chequeo de nulidad del token se hace antes de llamar al constructor en SyntaxAnalyzer.
-        // El chequeo de isLiteralType también se hace antes o se asume que el token es del tipo correcto.
-        // Para mayor seguridad, podemos mantener una aserción o un chequeo aquí.
-        if (token == null) {
-            throw new IllegalArgumentException("Token no puede ser nulo para LiteralNode");
-        }
-        // La validación de tipo se puede hacer aquí, pero isLiteralType necesita el token.
-        // Es mejor que SyntaxAnalyzer garantice que el token es del tipo correcto.
-        this.token = token;
-    }
-
     // Este método no es ideal aquí si el token puede ser nulo durante la construcción.
     // Se asume que el token ya fue validado por el parser antes de crear el LiteralNode.
     // Sin embargo, la traza de error indica que `this.token.getLexeme()` falla en `isLiteralType`
