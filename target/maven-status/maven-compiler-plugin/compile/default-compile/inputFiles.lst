@@ -1,8 +1,11 @@
+/app/src/main/java/com/example/AnalizadorAppGUI.java
 /app/src/main/java/com/example/ErrorCompilacion.java
 /app/src/main/java/com/example/Lexer.java
 /app/src/main/java/com/example/Main.java
 /app/src/main/java/com/example/Simbolo.java
+/app/src/main/java/com/example/SimboloTableModel.java
 /app/src/main/java/com/example/SyntaxAnalyzer.java
 /app/src/main/java/com/example/TablaDeSimbolos.java
 /app/src/main/java/com/example/Token.java
+/app/src/main/java/com/example/TokenTableModel.java
 /app/src/main/java/com/example/TokenType.java

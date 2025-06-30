@@ -2,6 +2,7 @@ package com.example;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Collection; // Importación añadida
 
 public class TablaDeSimbolos {
     // Usamos LinkedHashMap para mantener el orden de inserción, útil para imprimir la tabla.
@@ -82,5 +83,9 @@ public class TablaDeSimbolos {
         for (Simbolo simbolo : tabla.values()) {
             System.out.println(simbolo.toString());
         }
+    }
+
+    public Collection<Simbolo> getSimbolosAsCollection() {
+        return tabla.values();
     }
 }
