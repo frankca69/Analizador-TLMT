@@ -1,7 +1,8 @@
 package com.example;
 
 import java.util.List;
-import java.util.ArrayList; // For storing syntax errors or other info
+import java.util.ArrayList;
+import com.example.ast.*;
 
 public class SyntaxAnalyzer {
 
@@ -11,6 +12,7 @@ public class SyntaxAnalyzer {
     private List<String> syntaxLog;
     private TablaDeSimbolos tablaDeSimbolos;
     private List<ErrorCompilacion> erroresSintacticos;
+    private ProgramaNode astRootNode;
 
     public SyntaxAnalyzer(List<Token> tokens) {
         this.tokens = tokens;
@@ -19,363 +21,372 @@ public class SyntaxAnalyzer {
         this.syntaxLog = new ArrayList<>();
         this.tablaDeSimbolos = new TablaDeSimbolos();
         this.erroresSintacticos = new ArrayList<>();
+        this.astRootNode = null;
     }
 
-    public TablaDeSimbolos getTablaDeSimbolos() {
-        return tablaDeSimbolos;
-    }
+    public TablaDeSimbolos getTablaDeSimbolos() { return tablaDeSimbolos; }
+    public List<String> getSyntaxLog() { return syntaxLog; }
+    public List<ErrorCompilacion> getErroresSintacticos() { return erroresSintacticos; }
+    public ProgramaNode getAST() { return this.astRootNode; }
+
 
     private void advance() {
         currentTokenIndex++;
-        if (currentTokenIndex < tokens.size()) {
-            currentToken = tokens.get(currentTokenIndex);
-        } else {
-            currentToken = null; // End of tokens
-        }
+        currentToken = (currentTokenIndex < tokens.size()) ? tokens.get(currentTokenIndex) : null;
     }
 
-    private boolean match(TokenType expectedType) {
+    private Token match(TokenType expectedType) {
         if (currentToken != null && currentToken.getType() == expectedType) {
-            logRule("Consumido token: " + currentToken.getType() + " ('" + currentToken.getLexeme() + "')");
+            Token matchedToken = currentToken;
+            logRule("Consumido token: " + matchedToken.getType() + " ('" + matchedToken.getLexeme() + "')");
             advance();
-            return true;
+            return matchedToken;
         }
-        return false;
+        return null;
     }
 
-    private boolean matchKeyword(String keywordText) {
+    private Token matchKeyword(String keywordText) {
+        if (currentToken != null && currentToken.getType() == TokenType.KEYWORD && currentToken.getLexeme().equalsIgnoreCase(keywordText)) {
+            Token matchedToken = currentToken;
+            logRule("Consumido keyword: " + matchedToken.getLexeme());
+            advance();
+            return matchedToken;
+        }
+        return null;
+    }
+
+    private Token expect(TokenType expectedType, String errorMessage) {
+        Token matchedToken = match(expectedType);
+        if (matchedToken == null && erroresSintacticos.isEmpty()) { // Report error only if not already in error state from this line
+            reportError(errorMessage + ". Se encontró: " + (currentToken != null ? currentToken.getType() + " ('" + currentToken.getLexeme() + "')" : "FIN DE ARCHIVO"));
+        } else if (matchedToken == null && !erroresSintacticos.isEmpty() && erroresSintacticos.get(erroresSintacticos.size()-1).getLinea() != (currentToken != null ? currentToken.getLineNumber():0) ){
+             reportError(errorMessage + ". Se encontró: " + (currentToken != null ? currentToken.getType() + " ('" + currentToken.getLexeme() + "')" : "FIN DE ARCHIVO"));
+        }
+        return matchedToken;
+    }
+
+    private Token expectKeyword(String keywordText, String errorMessage) {
+        Token matchedToken = currentToken;
         if (currentToken != null && currentToken.getType() == TokenType.KEYWORD && currentToken.getLexeme().equalsIgnoreCase(keywordText)) {
             logRule("Consumido keyword: " + currentToken.getLexeme());
             advance();
-            return true;
-        }
-        return false;
-    }
-
-    private void expect(TokenType expectedType, String errorMessage) {
-        if (!match(expectedType)) {
-            reportError(errorMessage + ". Se encontró: " + (currentToken != null ? currentToken.getType() + " ('" + currentToken.getLexeme() + "')" : "FIN DE ARCHIVO"));
-        }
-    }
-
-    private void expectKeyword(String keywordText, String errorMessage) {
-         if (currentToken != null && currentToken.getType() == TokenType.KEYWORD && currentToken.getLexeme().equalsIgnoreCase(keywordText)) {
-            logRule("Consumido keyword: " + currentToken.getLexeme());
-            advance();
+            return matchedToken;
         } else {
             reportError(errorMessage + ". Se encontró: " + (currentToken != null ? currentToken.getType() + " ('" + currentToken.getLexeme() + "')" : "FIN DE ARCHIVO"));
+            return null;
         }
     }
 
     private void reportError(String message) {
-        int linea = (currentToken != null) ? currentToken.getLineNumber() : (tokens.isEmpty() ? 0 : tokens.get(tokens.size()-1).getLineNumber());
+        int linea = (currentToken != null) ? currentToken.getLineNumber() : (tokens.isEmpty() || currentTokenIndex >= tokens.size() ? 0 : tokens.get(Math.min(currentTokenIndex, tokens.size()-1)).getLineNumber());
         int columna = (currentToken != null) ? currentToken.getColumnNumber() : 0;
         String lexema = (currentToken != null) ? currentToken.getLexeme() : "EOF";
-
-        ErrorCompilacion error = new ErrorCompilacion(
-            ErrorCompilacion.TipoError.SINTACTICO,
-            message,
-            linea,
-            columna,
-            lexema
-        );
+        ErrorCompilacion error = new ErrorCompilacion( ErrorCompilacion.TipoError.SINTACTICO, message, linea, columna, lexema);
         erroresSintacticos.add(error);
-        syntaxLog.add(error.toString()); // Also add to general log for chronological view if desired
+        syntaxLog.add(error.toString());
     }
 
     private void logRule(String ruleMessage) {
-        String logMessage = "Regla/Acción Sintáctica: " + ruleMessage;
-        syntaxLog.add(logMessage);
-        // System.out.println(logMessage); // Reduce console noise, Main will print errors.
+        syntaxLog.add("Regla/Acción Sintáctica: " + ruleMessage);
     }
 
-    public List<String> getSyntaxLog() {
-        return syntaxLog;
-    }
-
-    public List<ErrorCompilacion> getErroresSintacticos() {
-        return erroresSintacticos;
-    }
-
-    public void parse() {
+    public void parse() { // Changed back to void, AST obtained via getAST()
         logRule("Iniciando análisis sintáctico...");
-        if (tokens.isEmpty() || currentToken == null && !tokens.isEmpty() && tokens.get(0).getType() == TokenType.COMMENT && tokens.size() == 1 ) {
-            // Special case: if only comments, it's fine, but currentToken might be null if last token was a comment.
-            // Or if tokens list is empty to begin with.
-             boolean onlyComments = true;
-             if(tokens.isEmpty()){
-                 logRule("No hay tokens para analizar.");
-                 return;
-             }
-             for(Token t : tokens){
-                 if(t.getType() != TokenType.COMMENT){
-                     onlyComments = false;
-                     break;
-                 }
-             }
-             if(onlyComments){
-                 logRule("El código solo contiene comentarios o está vacío.");
-                 return;
-             }
-             if(currentToken == null && !tokens.isEmpty()){ // If not only comments but currentToken is null
-                 reportError("Se llegó al final del archivo inesperadamente antes de iniciar el análisis del programa.");
-                 return;
-             }
+        this.astRootNode = null;
+        this.erroresSintacticos.clear();
+
+        boolean isEmptyOrCommentsOnly = tokens.stream().allMatch(t -> t.getType() == TokenType.COMMENT);
+        if (tokens.isEmpty() || isEmptyOrCommentsOnly && currentToken == null ) {
+             logRule("No hay sentencias válidas para analizar.");
+             return;
+        }
+        if (currentToken == null && !tokens.isEmpty() && !isEmptyOrCommentsOnly){
+             reportError("Se llegó al final del archivo inesperadamente antes de iniciar el análisis del programa.");
+             return;
         }
 
-        parsePrograma();
+        ProgramaNode programaNode = parsePrograma();
 
         if (currentToken != null) {
             reportError("Se esperaba FinDeArchivo pero se encontraron tokens adicionales a partir de: " + currentToken.getLexeme());
         }
+
+        if (erroresSintacticos.isEmpty() && programaNode != null) {
+            this.astRootNode = programaNode;
+        }
         logRule("Análisis sintáctico completado.");
     }
 
-    private void parsePrograma() {
+    private ProgramaNode parsePrograma() {
         logRule("Analizando <programa>");
-        expectKeyword("Proceso", "Se esperaba la palabra reservada 'Proceso'");
+        Token tokenProceso = expectKeyword("Proceso", "Se esperaba 'Proceso'");
+        if (tokenProceso == null && !erroresSintacticos.isEmpty()) return null;
 
+        IdentificadorNode nombreProcesoNode = null;
         Token nombreProcesoToken = currentToken;
         if (nombreProcesoToken != null && nombreProcesoToken.getType() == TokenType.IDENTIFIER) {
-            Simbolo procSimbolo = new Simbolo(
-                nombreProcesoToken.getLexeme(),
-                "N/A",
-                "nombre_proceso",
-                "global",
-                nombreProcesoToken.getLineNumber(),
-                null);
-            if (!tablaDeSimbolos.agregar(procSimbolo)) {
-                reportError("Error interno al agregar nombre de proceso a tabla de símbolos.");
-            }
+            nombreProcesoNode = new IdentificadorNode(nombreProcesoToken);
+            Simbolo procSimbolo = new Simbolo( nombreProcesoToken.getLexeme(), "N/A", "nombre_proceso", "global", nombreProcesoToken.getLineNumber(), null);
+            if (!tablaDeSimbolos.agregar(procSimbolo)) reportError("Error interno al agregar nombre de proceso.");
             tablaDeSimbolos.setAlcanceActual("global");
-            logRule("Nombre del proceso '" + nombreProcesoToken.getLexeme() + "' agregado a la tabla de símbolos. Alcance actual: " + tablaDeSimbolos.getAlcanceActual());
+            logRule("Nombre del proceso '" + nombreProcesoToken.getLexeme() + "' agregado. Alcance: global");
         }
-        expect(TokenType.IDENTIFIER, "Se esperaba un IDENTIFICADOR para el nombre del proceso");
+        expect(TokenType.IDENTIFIER, "Se esperaba IDENTIFICADOR para nombre de proceso");
+        if (nombreProcesoNode == null && nombreProcesoToken != null && nombreProcesoToken.getType() == TokenType.IDENTIFIER) { // If expect advanced currentToken but node wasn't created due to prior error state
+             nombreProcesoNode = new IdentificadorNode(nombreProcesoToken); // Create with the token that was expected
+        }
 
-        parseBloqueSentencias();
-        expectKeyword("FinProceso", "Se esperaba la palabra reservada 'FinProceso'");
+
+        List<NodoAST> sentencias = parseBloqueSentencias();
+        expectKeyword("FinProceso", "Se esperaba 'FinProceso'");
         logRule("Fin <programa>");
+        if(nombreProcesoNode == null && nombreProcesoToken != null) nombreProcesoNode = new IdentificadorNode(nombreProcesoToken); // Fallback if expect failed but token was an ID
+        if(nombreProcesoNode == null) { reportError("Nombre de proceso inválido para AST."); return null;}
+
+        return new ProgramaNode(tokenProceso, nombreProcesoNode, sentencias);
     }
 
-    private void parseBloqueSentencias() {
+    private List<NodoAST> parseBloqueSentencias() {
         logRule("Analizando <bloque_sentencias>");
+        List<NodoAST> sentencias = new ArrayList<>();
         while (currentToken != null && canStartSentencia(currentToken) && !isEndOfBlockMarker(currentToken)) {
-            parseSentencia();
+            NodoAST sentencia = parseSentencia();
+            if (sentencia != null) sentencias.add(sentencia);
+            else if (!erroresSintacticos.isEmpty()){ // Error occurred in parseSentencia
+                 // Try to advance to recover if parseSentencia didn't or couldn't.
+                 // This is a simple recovery, might need more sophistication.
+                Token problematicToken = currentToken;
+                advance();
+                if(currentToken == problematicToken) break; // Avoid infinite loop if advance doesn't move
+            } else { // Should not happen if canStartSentencia is true and no error
+                break;
+            }
         }
         logRule("Fin <bloque_sentencias>");
+        return sentencias;
     }
 
     private boolean canStartSentencia(Token token) {
         if (token == null) return false;
         if (token.getType() == TokenType.KEYWORD) {
             String lexeme = token.getLexeme().toLowerCase();
-            switch (lexeme) {
-                case "definir":
-                case "leer":
-                case "escribir":
-                case "si":
-                    return true;
-            }
-        } else if (token.getType() == TokenType.IDENTIFIER) {
-            return true;
-        }
+            switch (lexeme) { case "definir": case "leer": case "escribir": case "si": return true; }
+        } else if (token.getType() == TokenType.IDENTIFIER) return true;
         return false;
     }
-
     private boolean isEndOfBlockMarker(Token token) {
         if (token == null) return true;
         if (token.getType() == TokenType.KEYWORD) {
             String lexeme = token.getLexeme().toLowerCase();
-            switch (lexeme) {
-                case "finproceso":
-                case "finsi":
-                case "sino":
-                    return true;
-            }
+            switch (lexeme) { case "finproceso": case "finsi": case "sino": return true; }
         }
         return false;
     }
 
-    private void parseSentencia() {
+    private NodoAST parseSentencia() {
         logRule("Analizando <sentencia>");
-        if (currentToken == null) {
-            reportError("Se esperaba una sentencia, pero se encontró el fin de archivo.");
-            return;
-        }
+        if (currentToken == null) { reportError("Fin de archivo inesperado, se esperaba una sentencia."); return null; }
+        Token primerTokenSentencia = currentToken;
 
-        if (currentToken.getType() == TokenType.KEYWORD) {
-            String keyword = currentToken.getLexeme().toLowerCase();
-            switch (keyword) {
-                case "definir":
-                    parseSentenciaDefinir();
-                    break;
-                case "leer":
-                    parseSentenciaLeer();
-                    break;
-                case "escribir":
-                    parseSentenciaEscribir();
-                    break;
-                case "si":
-                    parseSentenciaSi();
-                    break;
+        if (primerTokenSentencia.getType() == TokenType.KEYWORD) {
+            switch (primerTokenSentencia.getLexeme().toLowerCase()) {
+                case "definir": return parseSentenciaDefinir();
+                case "leer": return parseSentenciaLeer();
+                case "escribir": return parseSentenciaEscribir();
+                case "si": return parseSentenciaSi();
                 default:
-                    reportError("Palabra clave no reconocida o no esperada para iniciar una sentencia: " + currentToken.getLexeme());
-                    advance();
+                    reportError("Palabra clave no esperada para iniciar sentencia: " + primerTokenSentencia.getLexeme());
+                    advance(); return null;
             }
-        } else if (currentToken.getType() == TokenType.IDENTIFIER) {
-            parseSentenciaAsignacion();
+        } else if (primerTokenSentencia.getType() == TokenType.IDENTIFIER) {
+            return parseSentenciaAsignacion();
         } else {
-            reportError("Sentencia inválida. Se encontró: " + currentToken.getLexeme());
-            advance();
+            reportError("Sentencia inválida. Se encontró: " + primerTokenSentencia.getLexeme());
+            advance(); return null;
         }
-        logRule("Fin <sentencia>");
     }
 
-    private void parseSentenciaDefinir() {
+    private DefinirNode parseSentenciaDefinir() {
         logRule("Analizando <sent_definir>");
-        expectKeyword("Definir", "Se esperaba 'Definir'");
-        List<Token> variablesDefinidas = parseListaVariables();
-        expectKeyword("Como", "Se esperaba 'Como' en la definición");
+        Token tokenDefinir = expectKeyword("Definir", "Se esperaba 'Definir'");
+        if (tokenDefinir == null && !erroresSintacticos.isEmpty()) return null;
+
+        List<IdentificadorNode> variablesNodes = new ArrayList<>();
+        List<Token> variablesTokens = parseListaVariables();
+        for(Token t : variablesTokens) variablesNodes.add(new IdentificadorNode(t));
+
+        expectKeyword("Como", "Se esperaba 'Como'");
         Token tipoDatoToken = parseTipoDato();
 
-        if (tipoDatoToken != null) {
-            for (Token varToken : variablesDefinidas) {
-                Simbolo varSimbolo = new Simbolo(
-                    varToken.getLexeme(),
-                    tipoDatoToken.getLexeme(),
-                    "variable",
-                    tablaDeSimbolos.getAlcanceActual(),
-                    varToken.getLineNumber(),
-                    null
-                );
-                if (!tablaDeSimbolos.agregar(varSimbolo)) {
-                    reportError("Variable '" + varToken.getLexeme() + "' ya definida en el alcance '" + tablaDeSimbolos.getAlcanceActual() + "'. Línea: " + varToken.getLineNumber());
+        if (tipoDatoToken != null && !variablesNodes.isEmpty()) {
+            for (IdentificadorNode varNode : variablesNodes) {
+                Simbolo s = new Simbolo(varNode.getNombre(), tipoDatoToken.getLexeme(), "variable", tablaDeSimbolos.getAlcanceActual(), varNode.getLinea(), null);
+                if (!tablaDeSimbolos.agregar(s)) {
+                    reportError("Variable '" + varNode.getNombre() + "' ya definida. Línea: " + varNode.getLinea());
                 } else {
-                    logRule("Variable '" + varToken.getLexeme() + "' ("+tipoDatoToken.getLexeme()+") agregada a la tabla de símbolos.");
+                    logRule("Variable '" + varNode.getNombre() + "' ("+tipoDatoToken.getLexeme()+") agregada a tabla.");
                 }
             }
         }
-        expect(TokenType.DELIMITER, "Se esperaba ';' al final de la sentencia Definir");
+        expect(TokenType.DELIMITER, "Se esperaba ';' al final de Definir");
         logRule("Fin <sent_definir>");
+        if (tokenDefinir == null || tipoDatoToken == null || variablesNodes.isEmpty() && !variablesTokens.isEmpty() /* check if nodes failed from tokens */) return null;
+        return new DefinirNode(tokenDefinir, variablesNodes, tipoDatoToken);
     }
 
     private List<Token> parseListaVariables() {
         logRule("Analizando <lista_variables>");
         List<Token> variables = new ArrayList<>();
-
-        if (currentToken != null && currentToken.getType() == TokenType.IDENTIFIER) {
-            variables.add(currentToken);
-            advance();
-        } else {
-            expect(TokenType.IDENTIFIER, "Se esperaba un IDENTIFICADOR de variable inicial");
-        }
+        Token idToken = expect(TokenType.IDENTIFIER, "Se esperaba IDENTIFICADOR de variable inicial");
+        if (idToken != null) variables.add(idToken);
+        else return variables; // Si el primero falla, no hay lista
 
         while (currentToken != null && currentToken.getType() == TokenType.DELIMITER && currentToken.getLexeme().equals(",")) {
             match(TokenType.DELIMITER);
-            if (currentToken != null && currentToken.getType() == TokenType.IDENTIFIER) {
-                variables.add(currentToken);
-                advance();
-            } else {
-                expect(TokenType.IDENTIFIER, "Se esperaba un IDENTIFICADOR de variable después de la coma");
-            }
+            idToken = expect(TokenType.IDENTIFIER, "Se esperaba IDENTIFICADOR de variable después de la coma");
+            if (idToken != null) variables.add(idToken);
+            else break;
         }
         logRule("Fin <lista_variables>");
         return variables;
     }
-
     private Token parseTipoDato() {
         logRule("Analizando <tipo_dato>");
         Token tipoToken = null;
         if (currentToken != null && currentToken.getType() == TokenType.KEYWORD) {
             String lexeme = currentToken.getLexeme().toLowerCase();
             switch (lexeme) {
-                case "entero":
-                case "real":
-                case "caracter":
-                case "logico":
-                case "cadena":
-                    logRule("Tipo de dato reconocido: " + currentToken.getLexeme());
+                case "entero": case "real": case "caracter": case "logico": case "cadena":
                     tipoToken = currentToken;
+                    logRule("Tipo de dato reconocido: " + tipoToken.getLexeme());
                     advance();
                     break;
-                default:
-                     reportError("Tipo de dato keyword no reconocido: " + currentToken.getLexeme());
+                default: reportError("Tipo de dato keyword no reconocido: " + lexeme);
             }
         } else {
-            reportError("Se esperaba una palabra clave de tipo de dato (Entero, Real, etc.). Encontrado: " +
-                        (currentToken != null ? currentToken.getType() + " ('" + currentToken.getLexeme() + "')" : "FIN DE ARCHIVO"));
+            reportError("Se esperaba una palabra clave de tipo de dato. Encontrado: " + (currentToken != null ? currentToken.getType() + " ('" + currentToken.getLexeme() + "')" : "FIN DE ARCHIVO"));
         }
         logRule("Fin <tipo_dato>");
         return tipoToken;
     }
 
-    private void parseSentenciaLeer() {
+    private LeerNode parseSentenciaLeer() {
         logRule("Analizando <sent_leer>");
-        expectKeyword("Leer", "Se esperaba 'Leer'");
-        List<Token> variablesLeidas = parseListaVariables();
-        for (Token varToken : variablesLeidas) {
-            Simbolo s = tablaDeSimbolos.buscarConPrioridad(varToken.getLexeme(), tablaDeSimbolos.getAlcanceActual());
-            if (s == null) {
-                reportError("Variable '" + varToken.getLexeme() + "' no ha sido definida. Línea: " + varToken.getLineNumber());
+        Token tokenLeer = expectKeyword("Leer", "Se esperaba 'Leer'");
+        if (tokenLeer == null && !erroresSintacticos.isEmpty()) return null;
+
+        List<IdentificadorNode> variablesNodes = new ArrayList<>();
+        List<Token> varTokens = parseListaVariables();
+        for(Token vt : varTokens) {
+            IdentificadorNode idNode = new IdentificadorNode(vt);
+            variablesNodes.add(idNode);
+            if (tablaDeSimbolos.buscarConPrioridad(vt.getLexeme(), tablaDeSimbolos.getAlcanceActual()) == null) {
+                reportError("Variable '" + vt.getLexeme() + "' no definida (en Leer). Línea: " + vt.getLineNumber());
             }
         }
-        expect(TokenType.DELIMITER, "Se esperaba ';' al final de la sentencia Leer");
+        expect(TokenType.DELIMITER, "Se esperaba ';' al final de Leer");
         logRule("Fin <sent_leer>");
+        return new LeerNode(tokenLeer, variablesNodes);
     }
 
-    private void parseSentenciaEscribir() {
+    private EscribirNode parseSentenciaEscribir() {
         logRule("Analizando <sent_escribir>");
-        expectKeyword("Escribir", "Se esperaba 'Escribir'");
-        parseListaExpresiones();
-        expect(TokenType.DELIMITER, "Se esperaba ';' al final de la sentencia Escribir");
+        Token tokenEscribir = expectKeyword("Escribir", "Se esperaba 'Escribir'");
+        if (tokenEscribir == null && !erroresSintacticos.isEmpty()) return null;
+        List<NodoAST> expresiones = parseListaExpresiones();
+        expect(TokenType.DELIMITER, "Se esperaba ';' al final de Escribir");
         logRule("Fin <sent_escribir>");
+        return new EscribirNode(tokenEscribir, expresiones);
     }
 
-    private void parseListaExpresiones() {
+    private List<NodoAST> parseListaExpresiones() {
         logRule("Analizando <lista_expresiones>");
-        parseExpresion();
+        List<NodoAST> expresiones = new ArrayList<>();
+        NodoAST expr = parseExpresion();
+        if (expr != null) expresiones.add(expr);
+        else { return expresiones; }
+
         while (currentToken != null && currentToken.getType() == TokenType.DELIMITER && currentToken.getLexeme().equals(",")) {
             match(TokenType.DELIMITER);
-            parseExpresion();
+            expr = parseExpresion();
+            if (expr != null) expresiones.add(expr);
+            else break;
         }
         logRule("Fin <lista_expresiones>");
+        return expresiones;
     }
 
-    private void parseSentenciaAsignacion() {
+    private AsignacionNode parseSentenciaAsignacion() {
         logRule("Analizando <sent_asignacion>");
-        Token variableAsignada = currentToken;
-        expect(TokenType.IDENTIFIER, "Se esperaba un IDENTIFICADOR para la asignación");
+        Token idToken = currentToken;
+        IdentificadorNode variableNode = null;
 
-        if (variableAsignada != null && variableAsignada.getType() == TokenType.IDENTIFIER) {
-            Simbolo s = tablaDeSimbolos.buscarConPrioridad(variableAsignada.getLexeme(), tablaDeSimbolos.getAlcanceActual());
-            if (s == null) {
-                reportError("Variable '" + variableAsignada.getLexeme() + "' no ha sido definida. Línea: " + variableAsignada.getLineNumber());
+        if (idToken != null && idToken.getType() == TokenType.IDENTIFIER) {
+            variableNode = new IdentificadorNode(idToken);
+             if (tablaDeSimbolos.buscarConPrioridad(idToken.getLexeme(), tablaDeSimbolos.getAlcanceActual()) == null) {
+                reportError("Variable '" + idToken.getLexeme() + "' no definida. Línea: " + idToken.getLineNumber());
             }
         }
+        expect(TokenType.IDENTIFIER, "Se esperaba IDENTIFICADOR para asignación");
+        // If expect did not advance due to error, idToken might still be the erroneous token.
+        // If expect advanced, idToken holds the correct one.
+        if (variableNode == null && idToken !=null && idToken.getType() == TokenType.IDENTIFIER) {
+            //This happens if expect() reported error but currentToken was ID so it consumed it.
+            //Or if it was already an ID and expect consumed it.
+            //The original variableAsignadaToken = currentToken; then expect; was better for node construction.
+            //Let's stick to variableNode = new IdentificadorNode(idToken); done *before* expect if idToken is IDENTIFIER.
+            //The current idToken is after expect, so it's the operator. This logic is flawed.
+            //Reverting to capturing idToken *before* expect.
+        }
+        // Corrected logic for variableNode:
+        // Token variableTokenForNode = currentToken; // Token before expect consumes it
+        // expect(TokenType.IDENTIFIER, "Se esperaba IDENTIFICADOR para asignación");
+        // if(variableTokenForNode != null && variableTokenForNode.getType() == TokenType.IDENTIFIER) variableNode = new IdentificadorNode(variableTokenForNode);
+        // This needs careful handling of when `expect` consumes. Let's assume `idToken` is the correct one if `expect` didn't error out.
+        // The `variableNode` above is constructed with `currentToken` *before* `expect`. That's correct.
 
-        if (currentToken != null && currentToken.getType() == TokenType.OPERATOR &&
-            (currentToken.getLexeme().equals("<-") || currentToken.getLexeme().equals("="))) {
-            logRule("Operador de asignación reconocido: " + currentToken.getLexeme());
+        Token opAsignacionToken = currentToken;
+        if (currentToken != null && currentToken.getType() == TokenType.OPERATOR && (currentToken.getLexeme().equals("<-") || currentToken.getLexeme().equals("="))) {
             advance();
         } else {
-            reportError("Se esperaba '<-' o '=' para la asignación. Encontrado: " +
-                        (currentToken != null ? currentToken.getLexeme() : "FIN DE ARCHIVO"));
+            reportError("Se esperaba '<-' o '=' para asignación. Encontrado: " + (currentToken != null ? currentToken.getLexeme() : "EOF"));
+            opAsignacionToken = null;
         }
-        parseExpresion();
-        expect(TokenType.DELIMITER, "Se esperaba ';' al final de la sentencia de asignación");
+
+        NodoAST exprNode = parseExpresion();
+        expect(TokenType.DELIMITER, "Se esperaba ';' al final de asignación");
         logRule("Fin <sent_asignacion>");
+
+        if (variableNode == null || opAsignacionToken == null || exprNode == null) return null;
+        return new AsignacionNode(variableNode, opAsignacionToken, exprNode);
     }
 
-    private void parseExpresion() {
+    private NodoAST parseExpresion() {
         logRule("Analizando <expresion>");
-        parseExpresionSimple();
-        while (currentToken != null && currentToken.getType() == TokenType.OPERATOR &&
-               isRelationalOrLogicalOperator(currentToken.getLexeme())) {
-            logRule("Operador relacional/lógico reconocido: " + currentToken.getLexeme());
+        NodoAST izquierda = parseExpresionSimple();
+        if (izquierda == null && !erroresSintacticos.isEmpty()) { // Check if error occurred in parseExpresionSimple
+             Token lastErrorToken = erroresSintacticos.get(erroresSintacticos.size()-1).getLexemaProblematico() != null ?
+                                   new Token(TokenType.ERROR, erroresSintacticos.get(erroresSintacticos.size()-1).getLexemaProblematico(), "", erroresSintacticos.get(erroresSintacticos.size()-1).getLinea(), erroresSintacticos.get(erroresSintacticos.size()-1).getColumna())
+                                   : currentToken; // Fallback
+            if(lastErrorToken == currentToken || currentTokenIndex > 0 && tokens.get(currentTokenIndex-1) == lastErrorToken ) return null;
+        }
+
+        while (currentToken != null && currentToken.getType() == TokenType.OPERATOR && isRelationalOrLogicalOperator(currentToken.getLexeme())) {
+            Token operador = currentToken;
             advance();
-            parseExpresionSimple();
+            NodoAST derecha = parseExpresionSimple();
+            if (derecha == null) {
+                 reportError("Se esperaba expresión después del operador '" + operador.getLexeme() + "'");
+                 return izquierda; // Return what was parsed on left, even if incomplete
+            }
+            if (izquierda == null) { // Should not happen if first part is mandatory.
+                reportError("Operando izquierdo faltante para operador '" + operador.getLexeme() + "'");
+                return null;
+            }
+            izquierda = new ExpresionBinariaNode(izquierda, operador, derecha);
         }
         logRule("Fin <expresion>");
+        return izquierda;
     }
 
     private boolean isRelationalOrLogicalOperator(String lexeme) {
@@ -383,93 +394,129 @@ public class SyntaxAnalyzer {
             case ">": case "<": case ">=": case "<=": case "==":
             case "=": case "<>": case "y": case "o":
                 return true;
-            default:
-                return false;
+            default: return false;
         }
     }
 
-    private void parseExpresionSimple() {
+    private NodoAST parseExpresionSimple() {
         logRule("Analizando <expresion_simple>");
-        parseTermino();
-        while (currentToken != null && currentToken.getType() == TokenType.OPERATOR &&
-               (currentToken.getLexeme().equals("+") || currentToken.getLexeme().equals("-"))) {
-            logRule("Operador aditivo/sustractivo reconocido: " + currentToken.getLexeme());
+        NodoAST izquierda = parseTermino();
+         if (izquierda == null && !erroresSintacticos.isEmpty()){
+            Token lastErrorToken = erroresSintacticos.get(erroresSintacticos.size()-1).getLexemaProblematico() != null ?
+                                   new Token(TokenType.ERROR, erroresSintacticos.get(erroresSintacticos.size()-1).getLexemaProblematico(), "", erroresSintacticos.get(erroresSintacticos.size()-1).getLinea(), erroresSintacticos.get(erroresSintacticos.size()-1).getColumna())
+                                   : currentToken;
+            if(lastErrorToken == currentToken || currentTokenIndex > 0 && tokens.get(currentTokenIndex-1) == lastErrorToken ) return null;
+        }
+
+        while (currentToken != null && currentToken.getType() == TokenType.OPERATOR && (currentToken.getLexeme().equals("+") || currentToken.getLexeme().equals("-"))) {
+            Token operador = currentToken;
             advance();
-            parseTermino();
+            NodoAST derecha = parseTermino();
+            if (derecha == null) {
+                reportError("Se esperaba término después del operador '" + operador.getLexeme() + "'");
+                return izquierda;
+            }
+            if (izquierda == null) {
+                 reportError("Operando izquierdo faltante para operador '" + operador.getLexeme() + "'");
+                return null;
+            }
+            izquierda = new ExpresionBinariaNode(izquierda, operador, derecha);
         }
         logRule("Fin <expresion_simple>");
+        return izquierda;
     }
 
-    private void parseTermino() {
+    private NodoAST parseTermino() {
         logRule("Analizando <termino>");
-        parseFactor();
-        while (currentToken != null && currentToken.getType() == TokenType.OPERATOR &&
-               (currentToken.getLexeme().equals("*") || currentToken.getLexeme().equals("/"))) {
-            logRule("Operador multiplicativo/divisivo reconocido: " + currentToken.getLexeme());
+        NodoAST izquierda = parseFactor();
+        if (izquierda == null && !erroresSintacticos.isEmpty()){
+            Token lastErrorToken = erroresSintacticos.get(erroresSintacticos.size()-1).getLexemaProblematico() != null ?
+                                   new Token(TokenType.ERROR, erroresSintacticos.get(erroresSintacticos.size()-1).getLexemaProblematico(), "", erroresSintacticos.get(erroresSintacticos.size()-1).getLinea(), erroresSintacticos.get(erroresSintacticos.size()-1).getColumna())
+                                   : currentToken;
+            if(lastErrorToken == currentToken || currentTokenIndex > 0 && tokens.get(currentTokenIndex-1) == lastErrorToken ) return null;
+        }
+
+        while (currentToken != null && currentToken.getType() == TokenType.OPERATOR && (currentToken.getLexeme().equals("*") || currentToken.getLexeme().equals("/"))) {
+            Token operador = currentToken;
             advance();
-            parseFactor();
+            NodoAST derecha = parseFactor();
+            if (derecha == null) {
+                reportError("Se esperaba factor después del operador '" + operador.getLexeme() + "'");
+                return izquierda;
+            }
+            if (izquierda == null) {
+                reportError("Operando izquierdo faltante para operador '" + operador.getLexeme() + "'");
+                return null;
+            }
+            izquierda = new ExpresionBinariaNode(izquierda, operador, derecha);
         }
         logRule("Fin <termino>");
+        return izquierda;
     }
 
-    private void parseFactor() {
+    private NodoAST parseFactor() {
         logRule("Analizando <factor>");
         if (currentToken == null) {
-            reportError("Se esperaba un factor (identificador, número, cadena, etc.), pero se encontró fin de archivo.");
-            return;
+            reportError("Factor inesperado: Fin de archivo.");
+            return null;
         }
-        switch (currentToken.getType()) {
+        Token factorToken = currentToken; // Captura el token actual para usar en la creación del nodo
+        switch (factorToken.getType()) {
             case IDENTIFIER:
-                Token idToken = currentToken;
-                Simbolo s = tablaDeSimbolos.buscarConPrioridad(idToken.getLexeme(), tablaDeSimbolos.getAlcanceActual());
+                Simbolo s = tablaDeSimbolos.buscarConPrioridad(factorToken.getLexeme(), tablaDeSimbolos.getAlcanceActual());
                 if (s == null) {
-                    reportError("Variable '" + idToken.getLexeme() + "' no ha sido definida. Línea: " + idToken.getLineNumber());
+                    reportError("Variable '" + factorToken.getLexeme() + "' no definida. Línea: " + factorToken.getLineNumber());
                 }
-                logRule("Factor reconocido: " + idToken.getType() + " ('" + idToken.getLexeme() + "')");
                 advance();
-                break;
+                return new IdentificadorNode(factorToken);
             case NUMBER:
             case STRING:
-                logRule("Factor reconocido: " + currentToken.getType() + " ('" + currentToken.getLexeme() + "')");
                 advance();
-                break;
+                return new LiteralNode(factorToken);
             case KEYWORD:
-                 if (currentToken.getLexeme().equalsIgnoreCase("verdadero") || currentToken.getLexeme().equalsIgnoreCase("falso")) {
-                    logRule("Factor reconocido (valor lógico): " + currentToken.getLexeme());
+                 if (factorToken.getLexeme().equalsIgnoreCase("verdadero") || factorToken.getLexeme().equalsIgnoreCase("falso")) {
                     advance();
+                    return new LiteralNode(factorToken);
                  } else {
-                    reportError("Palabra clave inesperada como factor: " + currentToken.getLexeme());
+                    reportError("Palabra clave inesperada como factor: " + factorToken.getLexeme());
+                    advance(); // Consumir el token erróneo para evitar bucles
+                    return null;
                  }
-                 break;
             case DELIMITER:
-                if (currentToken.getLexeme().equals("(")) {
-                    match(TokenType.DELIMITER);
-                    parseExpresion();
-                    expect(TokenType.DELIMITER, "Se esperaba ')' para cerrar la expresión");
+                if (factorToken.getLexeme().equals("(")) {
+                    Token parenApertura = match(TokenType.DELIMITER); // Consume "("
+                    NodoAST exprInterna = parseExpresion();
+                    expect(TokenType.DELIMITER, "Se esperaba ')'");
+                    if(exprInterna == null) return null; // Error en la expresión interna
+                    return new ExpresionParentizadaNode(exprInterna, parenApertura);
                 } else {
-                    reportError("Factor inesperado: Se encontró el delimitador '" + currentToken.getLexeme() + "'");
+                    reportError("Delimitador inesperado como factor: '" + factorToken.getLexeme() + "'");
+                    advance(); return null;
                 }
-                break;
             default:
-                reportError("Factor inesperado: " + currentToken.getType() + " ('" + currentToken.getLexeme() + "')");
-                break;
+                reportError("Factor inesperado: " + factorToken.getType() + " ('" + factorToken.getLexeme() + "')");
+                advance(); return null;
         }
-        logRule("Fin <factor>");
     }
 
-    private void parseSentenciaSi() {
+    private SiNode parseSentenciaSi() {
         logRule("Analizando <sent_si>");
-        expectKeyword("Si", "Se esperaba 'Si'");
-        parseExpresion();
-        expectKeyword("Entonces", "Se esperaba 'Entonces' después de la condición del Si");
-        parseBloqueSentencias();
+        Token tokenSi = expectKeyword("Si", "Se esperaba 'Si'");
+        if(tokenSi == null && !erroresSintacticos.isEmpty()) return null;
+
+        NodoAST condicion = parseExpresion();
+        expectKeyword("Entonces", "Se esperaba 'Entonces'");
+        List<NodoAST> bloqueEntonces = parseBloqueSentencias();
+        List<NodoAST> bloqueSiNo = null;
 
         if (currentToken != null && currentToken.getType() == TokenType.KEYWORD && currentToken.getLexeme().equalsIgnoreCase("SiNo")) {
             matchKeyword("SiNo");
-            parseBloqueSentencias();
+            bloqueSiNo = parseBloqueSentencias();
         }
 
-        expectKeyword("FinSi", "Se esperaba 'FinSi' para cerrar la estructura Si");
+        expectKeyword("FinSi", "Se esperaba 'FinSi'");
         logRule("Fin <sent_si>");
+        if(condicion == null && !erroresSintacticos.isEmpty()) return null;
+        return new SiNode(tokenSi, condicion, bloqueEntonces, bloqueSiNo);
     }
 }
