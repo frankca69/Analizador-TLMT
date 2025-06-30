@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.Collection; // Para aceptar Collection de la tabla de símbolos
 
 public class SimboloTableModel extends AbstractTableModel {
-    private final String[] columnNames = {"Nombre", "Tipo", "Categoría", "Alcance", "Línea", "Valor"};
+    private final String[] columnNames = {"Nombre", "Tipo", "Categoría", "Alcance", "Línea", "Valor", "Tamaño (Bytes)"};
     private List<Simbolo> simbolos;
 
     public SimboloTableModel() {
@@ -48,6 +48,7 @@ public class SimboloTableModel extends AbstractTableModel {
             case 3: return simbolo.getAlcance();
             case 4: return simbolo.getLinea();
             case 5: return simbolo.getValor() != null ? simbolo.getValor().toString() : "<indefinido>";
+            case 6: return simbolo.getSizeInBytes();
             default: return null;
         }
     }
@@ -61,6 +62,7 @@ public class SimboloTableModel extends AbstractTableModel {
             case 3: return String.class;
             case 4: return Integer.class;
             case 5: return String.class; // Valor se formatea como String
+            case 6: return Integer.class;
             default: return Object.class;
         }
     }

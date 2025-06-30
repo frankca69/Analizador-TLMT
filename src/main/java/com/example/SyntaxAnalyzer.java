@@ -126,7 +126,8 @@ public class SyntaxAnalyzer {
         Token nombreProcesoToken = currentToken;
         if (nombreProcesoToken != null && nombreProcesoToken.getType() == TokenType.IDENTIFIER) {
             nombreProcesoNode = new IdentificadorNode(nombreProcesoToken);
-            Simbolo procSimbolo = new Simbolo( nombreProcesoToken.getLexeme(), "N/A", "nombre_proceso", "global", nombreProcesoToken.getLineNumber(), null);
+            // El tamaño para "nombre_proceso" es 0, ya que no almacena datos como una variable.
+            Simbolo procSimbolo = new Simbolo( nombreProcesoToken.getLexeme(), "N/A", "nombre_proceso", "global", nombreProcesoToken.getLineNumber(), null, 0);
             if (!tablaDeSimbolos.agregar(procSimbolo)) reportError("Error interno al agregar nombre de proceso.");
             tablaDeSimbolos.setAlcanceActual("global");
             logRule("Nombre del proceso '" + nombreProcesoToken.getLexeme() + "' agregado. Alcance: global");
@@ -144,6 +145,20 @@ public class SyntaxAnalyzer {
         if(nombreProcesoNode == null) { reportError("Nombre de proceso inválido para AST."); return null;}
 
         return new ProgramaNode(tokenProceso, nombreProcesoNode, sentencias);
+    }
+
+    private int calculateSizeForType(String tipoNombre) {
+        if (tipoNombre == null) return 0;
+        switch (tipoNombre.toLowerCase()) {
+            case "entero": return 4;
+            case "real": return 8;
+            case "logico": return 1;
+            case "cadena": // O "caracter" si se usa como string de un solo char
+            case "caracter":
+                return 0; // Placeholder para tipos de tamaño variable o referencias
+            default:
+                return 0; // Para otros tipos o si no es un tipo de dato estándar
+        }
     }
 
     private List<NodoAST> parseBloqueSentencias() {
@@ -220,7 +235,9 @@ public class SyntaxAnalyzer {
 
         if (tipoDatoToken != null && !variablesNodes.isEmpty()) {
             for (IdentificadorNode varNode : variablesNodes) {
-                Simbolo s = new Simbolo(varNode.getNombre(), tipoDatoToken.getLexeme(), "variable", tablaDeSimbolos.getAlcanceActual(), varNode.getLinea(), null);
+                String tipoNombre = tipoDatoToken.getLexeme();
+                int sizeInBytes = calculateSizeForType(tipoNombre);
+                Simbolo s = new Simbolo(varNode.getNombre(), tipoNombre, "variable", tablaDeSimbolos.getAlcanceActual(), varNode.getLinea(), null, sizeInBytes);
                 if (!tablaDeSimbolos.agregar(s)) {
                     reportError("Variable '" + varNode.getNombre() + "' ya definida. Línea: " + varNode.getLinea());
                 } else {
@@ -471,12 +488,15 @@ public class SyntaxAnalyzer {
                 return new IdentificadorNode(factorToken);
             case NUMBER:
             case STRING:
+                // factorToken es el token actual. Lo guardamos antes de avanzar.
+                Token literalToken = factorToken;
                 advance();
-                return new LiteralNode(factorToken);
+                return new LiteralNode(literalToken);
             case KEYWORD:
                  if (factorToken.getLexeme().equalsIgnoreCase("verdadero") || factorToken.getLexeme().equalsIgnoreCase("falso")) {
+                    Token booleanLiteralToken = factorToken;
                     advance();
-                    return new LiteralNode(factorToken);
+                    return new LiteralNode(booleanLiteralToken);
                  } else {
                     reportError("Palabra clave inesperada como factor: " + factorToken.getLexeme());
                     advance(); // Consumir el token erróneo para evitar bucles
