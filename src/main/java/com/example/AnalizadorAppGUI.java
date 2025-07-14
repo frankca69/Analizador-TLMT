@@ -16,6 +16,7 @@ public class AnalizadorAppGUI extends JFrame {
     private JTextArea areaLogSintactico;
     private JTextArea areaAST; // Nueva área para el AST
     private JTextArea areaArbolSemantico; // Nueva área para el árbol semántico
+    private JTextArea areaCodigoTresDirecciones; // Nueva área para el Código de 3 Direcciones
     private JTable tablaSimbolos;
     private JLabel etiquetaEstado;
     private TokenTableModel tokenTableModel;
@@ -81,6 +82,13 @@ public class AnalizadorAppGUI extends JFrame {
         JScrollPane scrollArbolSemantico = new JScrollPane(areaArbolSemantico);
         panelPestanasSalida.addTab("Árbol Semántico", scrollArbolSemantico);
 
+        // Pestaña para Código de Tres Direcciones
+        areaCodigoTresDirecciones = new JTextArea();
+        areaCodigoTresDirecciones.setEditable(false);
+        areaCodigoTresDirecciones.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        JScrollPane scrollCodigoTresDirecciones = new JScrollPane(areaCodigoTresDirecciones);
+        panelPestanasSalida.addTab("Cód. 3 Direcciones", scrollCodigoTresDirecciones);
+
         // Pestaña para Tabla de Símbolos
         simboloTableModel = new SimboloTableModel();
         tablaSimbolos = new JTable(simboloTableModel);
@@ -110,6 +118,7 @@ public class AnalizadorAppGUI extends JFrame {
         areaLogSintactico.setText("");
         areaAST.setText(""); // Limpiar área del AST
         areaArbolSemantico.setText(""); // Limpiar área del árbol semántico
+        areaCodigoTresDirecciones.setText(""); // Limpiar área de código de 3 direcciones
         etiquetaEstado.setText("Analizando...");
         if (tokenTableModel != null) tokenTableModel.clearData();
         if (simboloTableModel != null) simboloTableModel.clearData();
@@ -195,6 +204,13 @@ public class AnalizadorAppGUI extends JFrame {
                 areaArbolSemantico.setText(arbolSemantico);
                 areaArbolSemantico.setCaretPosition(0);
 
+                // Generación de Código de Tres Direcciones
+                ThreeAddressCodeGenerator codeGenerator = new ThreeAddressCodeGenerator();
+                List<String> threeAddressCode = codeGenerator.generate(astRoot);
+                areaCodigoTresDirecciones.setText(String.join("\n", threeAddressCode));
+                areaCodigoTresDirecciones.setCaretPosition(0);
+
+
             } else {
                 // Esto podría pasar si parse() devuelve null incluso sin errores en la lista,
                 // por ejemplo, si el código está vacío o solo son comentarios.
@@ -202,6 +218,8 @@ public class AnalizadorAppGUI extends JFrame {
             }
         } else {
             areaAST.setText("No se generó el AST debido a errores sintácticos.");
+            areaArbolSemantico.setText("No se generó el Árbol Semántico debido a errores sintácticos.");
+            areaCodigoTresDirecciones.setText("No se generó el Código de 3 Direcciones debido a errores sintácticos.");
         }
 
 
