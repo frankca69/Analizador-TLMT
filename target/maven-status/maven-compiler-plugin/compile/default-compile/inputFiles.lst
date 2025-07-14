@@ -2,6 +2,7 @@
 /app/src/main/java/com/example/ErrorCompilacion.java
 /app/src/main/java/com/example/Lexer.java
 /app/src/main/java/com/example/Main.java
+/app/src/main/java/com/example/SemanticAnalyzer.java
 /app/src/main/java/com/example/Simbolo.java
 /app/src/main/java/com/example/SimboloTableModel.java
 /app/src/main/java/com/example/SyntaxAnalyzer.java
@@ -9,3 +10,14 @@
 /app/src/main/java/com/example/Token.java
 /app/src/main/java/com/example/TokenTableModel.java
 /app/src/main/java/com/example/TokenType.java
+/app/src/main/java/com/example/ast/AsignacionNode.java
+/app/src/main/java/com/example/ast/DefinirNode.java
+/app/src/main/java/com/example/ast/EscribirNode.java
+/app/src/main/java/com/example/ast/ExpresionBinariaNode.java
+/app/src/main/java/com/example/ast/ExpresionParentizadaNode.java
+/app/src/main/java/com/example/ast/IdentificadorNode.java
+/app/src/main/java/com/example/ast/LeerNode.java
+/app/src/main/java/com/example/ast/LiteralNode.java
+/app/src/main/java/com/example/ast/NodoAST.java
+/app/src/main/java/com/example/ast/ProgramaNode.java
+/app/src/main/java/com/example/ast/SiNode.java

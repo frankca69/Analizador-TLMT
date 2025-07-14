@@ -41,9 +41,13 @@ public class TablaDeSimbolos {
             // El SyntaxAnalyzer se encargará de reportar este error usando esta info.
             return false;
         }
+        // Ahora se asume que el Simbolo viene con el sizeInBytes correcto desde SyntaxAnalyzer.
         tabla.put(nombreKey, simbolo);
         return true;
     }
+
+    // El método helper calculateSizeInBytes ya no es necesario aquí.
+    // Fue movido a SyntaxAnalyzer.
 
     /**
      * Busca un símbolo por nombre en el alcance actual y luego en alcances superiores si se implementa.
