@@ -1,0 +1,4 @@
+Proceso NuevoTest
+  // Este es un nuevo archivo de prueba
+  Escribir "Este es un nuevo test";
+FinProceso

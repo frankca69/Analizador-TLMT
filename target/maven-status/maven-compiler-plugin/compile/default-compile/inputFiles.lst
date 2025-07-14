@@ -2,6 +2,7 @@
 /app/src/main/java/com/example/ErrorCompilacion.java
 /app/src/main/java/com/example/Lexer.java
 /app/src/main/java/com/example/Main.java
+/app/src/main/java/com/example/SemanticAnalyzer.java
 /app/src/main/java/com/example/Simbolo.java
 /app/src/main/java/com/example/SimboloTableModel.java
 /app/src/main/java/com/example/SyntaxAnalyzer.java
@@ -20,3 +21,4 @@
 /app/src/main/java/com/example/ast/NodoAST.java
 /app/src/main/java/com/example/ast/ProgramaNode.java
 /app/src/main/java/com/example/ast/SiNode.java
+/app/src/main/java/com/example/semantico/ArbolSemantico.java

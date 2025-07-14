@@ -15,6 +15,7 @@ public class AnalizadorAppGUI extends JFrame {
     private JTextArea areaErrores;
     private JTextArea areaLogSintactico;
     private JTextArea areaAST; // Nueva área para el AST
+    private JTextArea areaArbolSemantico; // Nueva área para el árbol semántico
     private JTable tablaSimbolos;
     private JLabel etiquetaEstado;
     private TokenTableModel tokenTableModel;
@@ -73,6 +74,13 @@ public class AnalizadorAppGUI extends JFrame {
         JScrollPane scrollAST = new JScrollPane(areaAST);
         panelPestanasSalida.addTab("Árbol Sintáctico (AST)", scrollAST);
 
+        // Pestaña para Árbol Semántico
+        areaArbolSemantico = new JTextArea();
+        areaArbolSemantico.setEditable(false);
+        areaArbolSemantico.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        JScrollPane scrollArbolSemantico = new JScrollPane(areaArbolSemantico);
+        panelPestanasSalida.addTab("Árbol Semántico", scrollArbolSemantico);
+
         // Pestaña para Tabla de Símbolos
         simboloTableModel = new SimboloTableModel();
         tablaSimbolos = new JTable(simboloTableModel);
@@ -101,6 +109,7 @@ public class AnalizadorAppGUI extends JFrame {
         areaErrores.setText("");
         areaLogSintactico.setText("");
         areaAST.setText(""); // Limpiar área del AST
+        areaArbolSemantico.setText(""); // Limpiar área del árbol semántico
         etiquetaEstado.setText("Analizando...");
         if (tokenTableModel != null) tokenTableModel.clearData();
         if (simboloTableModel != null) simboloTableModel.clearData();
@@ -179,6 +188,13 @@ public class AnalizadorAppGUI extends JFrame {
             if (astRoot != null) {
                 areaAST.setText(astRoot.aRepresentacionTextual("", true));
                 areaAST.setCaretPosition(0); // Scroll al inicio
+
+                // Análisis semántico
+                SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(astRoot);
+                String arbolSemantico = semanticAnalyzer.analyze();
+                areaArbolSemantico.setText(arbolSemantico);
+                areaArbolSemantico.setCaretPosition(0);
+
             } else {
                 // Esto podría pasar si parse() devuelve null incluso sin errores en la lista,
                 // por ejemplo, si el código está vacío o solo son comentarios.
