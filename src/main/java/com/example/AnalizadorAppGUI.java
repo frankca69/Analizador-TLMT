@@ -17,6 +17,7 @@ public class AnalizadorAppGUI extends JFrame {
     private JTextArea areaAST; // Nueva área para el AST
     private JTextArea areaArbolSemantico; // Nueva área para el árbol semántico
     private JTextArea areaCodigoTresDirecciones; // Nueva área para el Código de 3 Direcciones
+    private JTextArea areaCodigoOptimizado; // Nueva área para el Código Optimizado
     private JTable tablaSimbolos;
     private JLabel etiquetaEstado;
     private TokenTableModel tokenTableModel;
@@ -89,6 +90,13 @@ public class AnalizadorAppGUI extends JFrame {
         JScrollPane scrollCodigoTresDirecciones = new JScrollPane(areaCodigoTresDirecciones);
         panelPestanasSalida.addTab("Cód. 3 Direcciones", scrollCodigoTresDirecciones);
 
+        // Pestaña para Código Optimizado
+        areaCodigoOptimizado = new JTextArea();
+        areaCodigoOptimizado.setEditable(false);
+        areaCodigoOptimizado.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        JScrollPane scrollCodigoOptimizado = new JScrollPane(areaCodigoOptimizado);
+        panelPestanasSalida.addTab("Cód. Optimizado", scrollCodigoOptimizado);
+
         // Pestaña para Tabla de Símbolos
         simboloTableModel = new SimboloTableModel();
         tablaSimbolos = new JTable(simboloTableModel);
@@ -119,6 +127,7 @@ public class AnalizadorAppGUI extends JFrame {
         areaAST.setText(""); // Limpiar área del AST
         areaArbolSemantico.setText(""); // Limpiar área del árbol semántico
         areaCodigoTresDirecciones.setText(""); // Limpiar área de código de 3 direcciones
+        areaCodigoOptimizado.setText(""); // Limpiar área de código optimizado
         etiquetaEstado.setText("Analizando...");
         if (tokenTableModel != null) tokenTableModel.clearData();
         if (simboloTableModel != null) simboloTableModel.clearData();
@@ -210,6 +219,12 @@ public class AnalizadorAppGUI extends JFrame {
                 areaCodigoTresDirecciones.setText(String.join("\n", threeAddressCode));
                 areaCodigoTresDirecciones.setCaretPosition(0);
 
+                // Optimización del Código
+                CodeOptimizer optimizer = new CodeOptimizer(threeAddressCode);
+                List<String> optimizedCode = optimizer.optimize();
+                areaCodigoOptimizado.setText(String.join("\n", optimizedCode));
+                areaCodigoOptimizado.setCaretPosition(0);
+
 
             } else {
                 // Esto podría pasar si parse() devuelve null incluso sin errores en la lista,
@@ -220,6 +235,7 @@ public class AnalizadorAppGUI extends JFrame {
             areaAST.setText("No se generó el AST debido a errores sintácticos.");
             areaArbolSemantico.setText("No se generó el Árbol Semántico debido a errores sintácticos.");
             areaCodigoTresDirecciones.setText("No se generó el Código de 3 Direcciones debido a errores sintácticos.");
+            areaCodigoOptimizado.setText("No se generó el Código Optimizado debido a errores sintácticos.");
         }
 
 

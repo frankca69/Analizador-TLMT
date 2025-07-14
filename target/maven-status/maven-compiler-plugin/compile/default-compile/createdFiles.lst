@@ -13,6 +13,7 @@ com/example/ast/ExpresionParentizadaNode.class
 com/example/ast/ExpresionBinariaNode.class
 com/example/SemanticAnalyzer.class
 com/example/ast/SiNode.class
+com/example/CodeOptimizer.class
 com/example/ThreeAddressCodeGenerator.class
 com/example/TokenTableModel.class
 com/example/ast/NodoAST.class
