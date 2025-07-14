@@ -20,6 +20,7 @@ com/example/TablaDeSimbolos.class
 com/example/Token.class
 com/example/TokenType.class
 com/example/ast/ProgramaNode.class
+com/example/semantico/ArbolSemantico.class
 com/example/ast/IdentificadorNode.class
 com/example/ast/AsignacionNode.class
 com/example/SyntaxAnalyzer.class

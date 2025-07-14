@@ -1,6 +1,7 @@
 package com.example;
 
 import com.example.ast.ProgramaNode;
+import com.example.semantico.ArbolSemantico;
 
 public class SemanticAnalyzer {
 
@@ -11,8 +12,10 @@ public class SemanticAnalyzer {
     }
 
     public String analyze() {
-        // For now, we'll just return a placeholder string.
-        // In the future, this method will traverse the AST and build the semantic tree.
-        return "Semantic analysis not yet implemented.";
+        if (ast == null) {
+            return "No AST available for semantic analysis.";
+        }
+        ArbolSemantico arbolSemantico = new ArbolSemantico(ast, "programa");
+        return arbolSemantico.aRepresentacionTextual("", true);
     }
 }

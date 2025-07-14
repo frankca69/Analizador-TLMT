@@ -21,3 +21,4 @@
 /app/src/main/java/com/example/ast/NodoAST.java
 /app/src/main/java/com/example/ast/ProgramaNode.java
 /app/src/main/java/com/example/ast/SiNode.java
+/app/src/main/java/com/example/semantico/ArbolSemantico.java
