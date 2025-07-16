@@ -1,0 +1,32 @@
+DECLARE a ENTERO
+DECLARE b ENTERO
+DECLARE resultado ENTERO
+DECLARE condicion BOOLEAN
+t0 = 15
+a = t0
+t1 = 10
+b = t1
+t2 = a + b
+resultado = t2
+t3 = a > b
+condicion = t3
+PRINT "Valores: a = ", a, ", b = ", b
+PRINT "Resultado: ", resultado
+PRINT "Condicion: ", condicion
+IF condicion GOTO L0
+GOTO L1
+L0:
+PRINT "A es mayor que B."
+GOTO L2
+L1:
+PRINT "A es menor que B."
+GOTO L2
+L2:
+t4 = a == b
+IF t4 GOTO L3
+GOTO L5
+L3:
+PRINT "A y B son iguales."
+GOTO L5
+L5:
+END

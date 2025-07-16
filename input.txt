@@ -1,37 +1,26 @@
-Proceso Saludo
-  // Este programa saluda al usuario
-  Definir nombre Como Caracter;
-  Escribir "Hola! ¿Cómo te llamas?";
-  Leer nombre;
-  Escribir "Bienvenido ", nombre, " al mundo de Pseint!";
+Proceso PruebaSintacticaRefinada
+  Definir a, b, resultado Como Entero;
+  Definir condicion Como Logico;
 
-  Definir a, b, suma Como Entero;
-  a <- 10;
-  b <- 20;
-  suma <- a + b;
-  Escribir "La suma de ", a, " y ", b, " es: ", suma;
+  // Valores predefinidos en el código
+  a <- 15;
+  b <- 10;
 
-  Si suma > 25 Entonces
-    Escribir "La suma es mayor a 25";
+  resultado <- a + b;
+  condicion <- a > b;
+
+  Escribir "Valores: a = ", a, ", b = ", b;
+  Escribir "Resultado: ", resultado;
+  Escribir "Condicion: ", condicion;
+
+  Si condicion Entonces
+    Escribir "A es mayor que B.";
   SiNo
-    Escribir "La suma es menor o igual a 25";
+    Escribir "A es menor que B.";
   FinSi
 
-  // Prueba de operadores y errores
-  Definir x Como Real;
-  x <- 5.5 * 2 / (3 - 1);
-  Escribir "Valor de x: ", x;
-  Escribir "Esto es un string con 'comillas simples' y \"comillas dobles\"";
+  Si a == b Entonces
+    Escribir "A y B son iguales.";
+  FinSi
 
-  // Errores léxicos
-  variable_con_error@;
-  otra_variable&;
-  numero_invalido = 1.2.3;
-  Escribir "Fin del proceso con errores léxicos";
 FinProceso
-
-// Otro comentario al final
-!inicio // Error al inicio de una palabra reservada
-% porcentaje
-'cadena no cerrada
-"otra cadena sin cerrar
