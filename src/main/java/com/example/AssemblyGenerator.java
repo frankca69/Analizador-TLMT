@@ -13,23 +13,41 @@ public class AssemblyGenerator {
         this.assemblyCode = new ArrayList<>();
     }
 
-    public List<String> generate() {
-        // Aquí se llamarán a los métodos para traducir cada instrucción
-        // de tres direcciones a ensamblador.
-        // Por ahora, solo es una estructura básica.
-
-        generateHeader();
-        translateInstructions();
-        generateFooter();
-
-        return assemblyCode;
-    }
 
     private void generateHeader() {
+        assemblyCode.add("section .bss");
+        declareVariables();
         assemblyCode.add("section .data");
         // Aquí se podrían definir datos, como strings para Escribir.
         assemblyCode.add("section .text");
         assemblyCode.add("global _start");
+    }
+
+    private void declareVariables() {
+        for (String instruction : threeAddressCode) {
+            String[] parts = instruction.split(" ");
+            if (parts.length > 0) {
+                String var = parts[0].trim();
+                if (isVariable(var)) {
+                    // Asegurarse de no declarar la misma variable dos veces
+                    if (assemblyCode.stream().noneMatch(line -> line.startsWith(var + " "))) {
+                        assemblyCode.add(var + " resd 1"); // Reservar 1 dword (4 bytes) para cada variable
+                    }
+                }
+            }
+            if (parts.length > 2 && isVariable(parts[2].trim())) {
+                 String var = parts[2].trim();
+                 if (assemblyCode.stream().noneMatch(line -> line.startsWith(var + " "))) {
+                        assemblyCode.add(var + " resd 1");
+                 }
+            }
+        }
+    }
+
+    private boolean isVariable(String s) {
+        // Una suposición simple: si no es un número y no es una palabra clave, es una variable.
+        // Esto debería ser más robusto en un compilador real.
+        return !isNumeric(s) && !s.endsWith(":") && !s.equals("goto") && !s.equals("if_false") && !s.equals("write") && !s.equals("read") && !s.equals("start_program") && !s.equals("end_program");
     }
 
     private void translateInstructions() {
@@ -43,7 +61,11 @@ public class AssemblyGenerator {
             } else if (instruction.startsWith("end_program")) {
                 // La salida ya se maneja en el pie de página
             } else if (instruction.contains("=")) {
-                handleAssignment(instruction);
+                if (instruction.contains(">") || instruction.contains("<") || instruction.contains("==")) {
+                    handleComparison(instruction);
+                } else {
+                    handleAssignment(instruction);
+                }
             } else if (instruction.startsWith("write")) {
                 handleWrite(instruction);
             } else if (instruction.startsWith("read")) {
@@ -102,13 +124,26 @@ public class AssemblyGenerator {
         }
     }
 
+    private int strCount = 0;
+
     private void handleWrite(String instruction) {
-        // Esta es una implementación muy simplificada para escribir números.
-        // Escribir strings requeriría más código para manejar syscalls de escritura.
-        String var = instruction.substring(6).trim();
-        assemblyCode.add("    ; Escribiendo valor de " + var);
-        assemblyCode.add("    mov eax, [" + var + "]");
-        assemblyCode.add("    ; ... (código para imprimir el número en EAX)");
+        String value = instruction.substring(6).trim();
+        if (value.startsWith("\"")) { // Es una cadena
+            String str = value.substring(1, value.length() - 1);
+            String strLabel = "str" + strCount++;
+            // Añadir la declaración de la cadena a la sección .data
+            // Esto se hará en una pasada separada para mantener el código organizado.
+            // Por ahora, asumimos que ya está allí.
+            assemblyCode.add("    mov rax, 1 ; sys_write");
+            assemblyCode.add("    mov rdi, 1 ; stdout");
+            assemblyCode.add("    mov rsi, " + strLabel);
+            assemblyCode.add("    mov rdx, " + (str.length() + 1));
+            assemblyCode.add("    syscall");
+        } else { // Es una variable
+            assemblyCode.add("    ; Escribiendo valor de " + value);
+            assemblyCode.add("    mov eax, [" + value + "]");
+            assemblyCode.add("    call _printRAX"); // Llama a una función para imprimir el número
+        }
     }
 
     private void handleRead(String instruction) {
@@ -141,5 +176,90 @@ public class AssemblyGenerator {
         assemblyCode.add("    mov rax, 60  ; syscall para exit");
         assemblyCode.add("    xor rdi, rdi ; código de salida 0");
         assemblyCode.add("    syscall");
+
+        // Función para imprimir un número en EAX
+        assemblyCode.add("_printRAX:");
+        assemblyCode.add("    mov rsi, print_buffer + 10");
+        assemblyCode.add("    mov byte [print_buffer + 11], 0xa ; newline");
+        assemblyCode.add("    mov r10, 10");
+        assemblyCode.add("_printRAX_loop:");
+        assemblyCode.add("    xor rdx, rdx");
+        assemblyCode.add("    div r10");
+        assemblyCode.add("    add dl, '0'");
+        assemblyCode.add("    mov [rsi], dl");
+        assemblyCode.add("    dec rsi");
+        assemblyCode.add("    test rax, rax");
+        assemblyCode.add("    jnz _printRAX_loop");
+        assemblyCode.add("    inc rsi");
+        assemblyCode.add("    mov rdx, print_buffer + 12");
+        assemblyCode.add("    sub rdx, rsi");
+        assemblyCode.add("    mov rax, 1");
+        assemblyCode.add("    mov rdi, 1");
+        assemblyCode.add("    syscall");
+        assemblyCode.add("    ret");
+    }
+
+    public List<String> generate() {
+        List<String> dataSection = new ArrayList<>();
+        strCount = 0;
+
+        // Primera pasada: encontrar todas las cadenas para la sección .data
+        for (String instruction : threeAddressCode) {
+            if (instruction.trim().startsWith("write") && instruction.contains("\"")) {
+                String value = instruction.substring(instruction.indexOf("\"") + 1, instruction.lastIndexOf("\""));
+                String strLabel = "str" + strCount++;
+                dataSection.add(strLabel + " db '" + value + "', 0xa");
+            }
+        }
+
+        generateHeader();
+        assemblyCode.addAll(dataSection);
+        translateInstructions();
+        generateFooter();
+        // Asegurarse de que el búfer de impresión esté en .bss
+        assemblyCode.add(1, "print_buffer resb 12");
+        return assemblyCode;
+    }
+
+    private void handleComparison(String instruction) {
+        String[] parts = instruction.split(" ");
+        String dest = parts[0].trim();
+        String op1 = parts[2].trim();
+        String op = parts[3].trim();
+        String op2 = parts[4].trim();
+
+        if(isNumeric(op1)) {
+            assemblyCode.add("    mov eax, " + op1);
+        } else {
+            assemblyCode.add("    mov eax, [" + op1 + "]");
+        }
+
+        if(isNumeric(op2)) {
+            assemblyCode.add("    cmp eax, " + op2);
+        } else {
+            assemblyCode.add("    cmp eax, [" + op2 + "]");
+        }
+
+        String trueLabel = newLabel();
+        String endLabel = newLabel();
+
+        if (op.equals(">")) {
+            assemblyCode.add("    jg " + trueLabel);
+        } else if (op.equals("<")) {
+            assemblyCode.add("    jl " + trueLabel);
+        } else if (op.equals("==")) {
+            assemblyCode.add("    je " + trueLabel);
+        }
+        // ... (añadir más comparaciones)
+
+        assemblyCode.add("    mov byte [" + dest + "], 0 ; false");
+        assemblyCode.add("    jmp " + endLabel);
+        assemblyCode.add(trueLabel + ":");
+        assemblyCode.add("    mov byte [" + dest + "], 1 ; true");
+        assemblyCode.add(endLabel + ":");
+    }
+
+    private String newLabel() {
+        return "L" + (assemblyCode.size() + 100); // Un método simple para generar etiquetas únicas
     }
 }
