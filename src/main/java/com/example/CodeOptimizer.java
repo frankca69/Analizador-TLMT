@@ -18,6 +18,7 @@ public class CodeOptimizer {
     public List<String> optimize() {
         propagateConstants();
         removeRedundantJumps();
+        eliminateTemporaryVariables();
         return optimizedCode;
     }
 
@@ -87,6 +88,16 @@ public class CodeOptimizer {
                 instruction = String.join(" ", parts);
             }
             newCode.add(instruction);
+        }
+        optimizedCode = newCode;
+    }
+
+    private void eliminateTemporaryVariables() {
+        List<String> newCode = new ArrayList<>();
+        for (String instruction : optimizedCode) {
+            if (!instruction.startsWith("t")) {
+                newCode.add(instruction);
+            }
         }
         optimizedCode = newCode;
     }

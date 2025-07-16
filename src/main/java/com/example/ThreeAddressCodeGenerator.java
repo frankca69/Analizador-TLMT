@@ -45,53 +45,95 @@ public class ThreeAddressCodeGenerator {
         } else if (node instanceof LeerNode) {
             visitLeerNode((LeerNode) node);
         } else if (node instanceof DefinirNode) {
-            // No se genera código para las definiciones, ya que es una declaración.
+            visitDefinirNode((DefinirNode) node);
         }
         // Agrega más casos para otros tipos de nodos si es necesario
     }
 
+    private void visitDefinirNode(DefinirNode node) {
+        String tipoDato = node.getTipoDatoNombre().toUpperCase();
+        if (tipoDato.equals("LOGICO")) {
+            tipoDato = "BOOLEAN";
+        }
+        for (IdentificadorNode variable : node.getVariables()) {
+            code.add("DECLARE " + variable.getNombre() + " " + tipoDato);
+        }
+    }
+
     private void visitProgramaNode(ProgramaNode node) {
-        code.add("start_program: " + node.getNombreProceso().getNombre());
+        // code.add("start_program: " + node.getNombreProceso().getNombre());
         for (NodoAST statement : node.getSentencias()) {
             visit(statement);
         }
-        code.add("end_program");
+        code.add("END");
     }
 
     private void visitAsignacionNode(AsignacionNode node) {
         String exprResult = visitExpression(node.getExpresion());
-        code.add(node.getIdentificador().getNombre() + " = " + exprResult);
+        if (node.getExpresion() instanceof LiteralNode) {
+            String temp = newTemp();
+            code.add(temp + " = " + exprResult);
+            code.add(node.getIdentificador().getNombre() + " = " + temp);
+        } else {
+            code.add(node.getIdentificador().getNombre() + " = " + exprResult);
+        }
     }
 
     private void visitSiNode(SiNode node) {
-        String labelElse = newLabel();
+        String conditionResult = visitExpression(node.getCondicion());
+
+        String labelTrue = newLabel();
+        String labelFalse = newLabel();
         String labelEnd = newLabel();
 
-        String conditionResult = visitExpression(node.getCondicion());
-        code.add("if_false " + conditionResult + " goto " + labelElse);
-
-        // Bloque "entonces"
-        for (NodoAST statement : node.getBloqueEntonces()) {
-            visit(statement);
-        }
-        code.add("goto " + labelEnd);
-
-        // Bloque "sino"
-        code.add(labelElse + ":");
         if (node.tieneSiNo()) {
+            code.add("IF " + conditionResult + " GOTO " + labelTrue);
+            code.add("GOTO " + labelFalse);
+
+            // Bloque "entonces"
+            code.add(labelTrue + ":");
+            for (NodoAST statement : node.getBloqueEntonces()) {
+                visit(statement);
+            }
+            code.add("GOTO " + labelEnd);
+
+            // Bloque "sino"
+            code.add(labelFalse + ":");
             for (NodoAST statement : node.getBloqueSiNo()) {
                 visit(statement);
             }
+            code.add("GOTO " + labelEnd);
+
+        } else {
+            code.add("IF " + conditionResult + " GOTO " + labelTrue);
+            code.add("GOTO " + labelEnd);
+
+            // Bloque "entonces"
+            code.add(labelTrue + ":");
+            for (NodoAST statement : node.getBloqueEntonces()) {
+                visit(statement);
+            }
+            code.add("GOTO " + labelEnd);
         }
 
         code.add(labelEnd + ":");
     }
 
     private void visitEscribirNode(EscribirNode node) {
+        List<String> expressions = new ArrayList<>();
         for (NodoAST expr : node.getExpresiones()) {
-            String result = visitExpression(expr);
-            code.add("write " + result);
+            if (expr instanceof LiteralNode) {
+                Object value = ((LiteralNode) expr).getValor();
+                if (value instanceof String) {
+                    expressions.add("\"" + value + "\"");
+                } else {
+                    expressions.add(String.valueOf(value));
+                }
+            } else {
+                expressions.add(visitExpression(expr));
+            }
         }
+        code.add("PRINT " + String.join(", ", expressions));
     }
 
     private void visitLeerNode(LeerNode node) {

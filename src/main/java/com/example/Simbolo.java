@@ -19,6 +19,10 @@ public class Simbolo {
         this.sizeInBytes = sizeInBytes;
     }
 
+    public Simbolo(String nombre, String tipo, String alcance) {
+        this(nombre, tipo, "variable", alcance, 0, null, 4);
+    }
+
     public String getNombre() {
         return nombre;
     }

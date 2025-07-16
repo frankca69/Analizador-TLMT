@@ -1,8 +1,10 @@
 /app/src/main/java/com/example/AnalizadorAppGUI.java
+/app/src/main/java/com/example/AssemblyGenerator.java
 /app/src/main/java/com/example/CodeOptimizer.java
 /app/src/main/java/com/example/ErrorCompilacion.java
 /app/src/main/java/com/example/Lexer.java
 /app/src/main/java/com/example/Main.java
+/app/src/main/java/com/example/MainCli.java
 /app/src/main/java/com/example/SemanticAnalyzer.java
 /app/src/main/java/com/example/Simbolo.java
 /app/src/main/java/com/example/SimboloTableModel.java

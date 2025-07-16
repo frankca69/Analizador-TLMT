@@ -18,6 +18,7 @@ public class AnalizadorAppGUI extends JFrame {
     private JTextArea areaArbolSemantico; // Nueva área para el árbol semántico
     private JTextArea areaCodigoTresDirecciones; // Nueva área para el Código de 3 Direcciones
     private JTextArea areaCodigoOptimizado; // Nueva área para el Código Optimizado
+    private JTextArea areaCodigoAssembler;
     private JTable tablaSimbolos;
     private JLabel etiquetaEstado;
     private TokenTableModel tokenTableModel;
@@ -97,6 +98,13 @@ public class AnalizadorAppGUI extends JFrame {
         JScrollPane scrollCodigoOptimizado = new JScrollPane(areaCodigoOptimizado);
         panelPestanasSalida.addTab("Cód. Optimizado", scrollCodigoOptimizado);
 
+        // Pestaña para Código Assembler
+        areaCodigoAssembler = new JTextArea();
+        areaCodigoAssembler.setEditable(false);
+        areaCodigoAssembler.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        JScrollPane scrollCodigoAssembler = new JScrollPane(areaCodigoAssembler);
+        panelPestanasSalida.addTab("Cód. Assembler", scrollCodigoAssembler);
+
         // Pestaña para Tabla de Símbolos
         simboloTableModel = new SimboloTableModel();
         tablaSimbolos = new JTable(simboloTableModel);
@@ -128,6 +136,7 @@ public class AnalizadorAppGUI extends JFrame {
         areaArbolSemantico.setText(""); // Limpiar área del árbol semántico
         areaCodigoTresDirecciones.setText(""); // Limpiar área de código de 3 direcciones
         areaCodigoOptimizado.setText(""); // Limpiar área de código optimizado
+        areaCodigoAssembler.setText(""); // Limpiar área de código assembler
         etiquetaEstado.setText("Analizando...");
         if (tokenTableModel != null) tokenTableModel.clearData();
         if (simboloTableModel != null) simboloTableModel.clearData();
@@ -225,6 +234,11 @@ public class AnalizadorAppGUI extends JFrame {
                 areaCodigoOptimizado.setText(String.join("\n", optimizedCode));
                 areaCodigoOptimizado.setCaretPosition(0);
 
+                // Generación de Código Assembler
+                AssemblyGenerator assembler = new AssemblyGenerator(optimizedCode, tablaSimbolosObj);
+                String assemblyCode = assembler.generate();
+                areaCodigoAssembler.setText(assemblyCode);
+                areaCodigoAssembler.setCaretPosition(0);
 
             } else {
                 // Esto podría pasar si parse() devuelve null incluso sin errores en la lista,
@@ -236,6 +250,7 @@ public class AnalizadorAppGUI extends JFrame {
             areaArbolSemantico.setText("No se generó el Árbol Semántico debido a errores sintácticos.");
             areaCodigoTresDirecciones.setText("No se generó el Código de 3 Direcciones debido a errores sintácticos.");
             areaCodigoOptimizado.setText("No se generó el Código Optimizado debido a errores sintácticos.");
+            areaCodigoAssembler.setText("No se generó el Código Assembler debido a errores sintácticos.");
         }
 
 
