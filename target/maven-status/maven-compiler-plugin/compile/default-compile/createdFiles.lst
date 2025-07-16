@@ -1,5 +1,6 @@
 com/example/ast/LiteralNode$1.class
 com/example/ast/EscribirNode.class
+com/example/AssemblyGenerator.class
 com/example/ast/LeerNode.class
 com/example/ErrorCompilacion$TipoError.class
 com/example/SimboloTableModel.class
