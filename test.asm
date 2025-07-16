@@ -4,18 +4,15 @@ a resd 1
 b resd 1
 c resd 1
 t0 resd 1
-t1 resd 1
-t2 resd 1
 section .data
-str0 db 'El valor de c es: ', 0xa
-str1 db 'c es mayor que 30', 0xa
-str2 db 'c no es mayor que 30', 0xa
-str3 db 'Esto siempre se ejecuta', 0xa
+str0 db 'La suma de '
+str1 db ' y '
+str2 db ' es: '
 section .text
 global _start
 _start:
-    mov dword [a], 10
-    mov dword [b], 20
+    mov dword [a], 5
+    mov dword [b], 7
     mov eax, [a]
     add eax, [b]
     mov [t0], eax
@@ -24,49 +21,24 @@ _start:
     mov rax, 1
     mov rdi, 1
     mov rsi, str0
-    mov rdx, 19
+    mov rdx, 11
     syscall
-    mov eax, [c]
+    mov eax, [a]
     call _printRAX
-    mov eax, [c]
-    cmp eax, 30
-    jg L157
-    mov byte [t1], 0
-    jmp L159
-L157:
-    mov byte [t1], 1
-L159:
-    mov al, [t1]
-    cmp al, 0
-    je L121
     mov rax, 1
     mov rdi, 1
     mov rsi, str1
-    mov rdx, 19
+    mov rdx, 3
     syscall
-L121:
+    mov eax, [b]
+    call _printRAX
     mov rax, 1
     mov rdi, 1
     mov rsi, str2
-    mov rdx, 22
+    mov rdx, 5
     syscall
-    mov eax, 1
-    cmp eax, 1
-    je L167
-    mov byte [t2], 0
-    jmp L169
-L167:
-    mov byte [t2], 1
-L169:
-    mov al, [t2]
-    cmp al, 0
-    je L133
-    mov rax, 1
-    mov rdi, 1
-    mov rsi, str3
-    mov rdx, 25
-    syscall
-L133:
+    mov eax, [c]
+    call _printRAX
     mov rax, 60
     xor rdi, rdi
     syscall

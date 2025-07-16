@@ -127,22 +127,24 @@ public class AssemblyGenerator {
     private int strCount = 0;
 
     private void handleWrite(String instruction) {
-        String value = instruction.substring(6).trim();
-        if (value.startsWith("\"")) { // Es una cadena
-            String str = value.substring(1, value.length() - 1);
-            String strLabel = "str" + strCount++;
-            // Añadir la declaración de la cadena a la sección .data
-            // Esto se hará en una pasada separada para mantener el código organizado.
-            // Por ahora, asumimos que ya está allí.
-            assemblyCode.add("    mov rax, 1 ; sys_write");
-            assemblyCode.add("    mov rdi, 1 ; stdout");
-            assemblyCode.add("    mov rsi, " + strLabel);
-            assemblyCode.add("    mov rdx, " + (str.length() + 1));
-            assemblyCode.add("    syscall");
-        } else { // Es una variable
-            assemblyCode.add("    ; Escribiendo valor de " + value);
-            assemblyCode.add("    mov eax, [" + value + "]");
-            assemblyCode.add("    call _printRAX"); // Llama a una función para imprimir el número
+        String content = instruction.substring(5).trim();
+        String[] parts = content.split(",");
+        for (String part : parts) {
+            part = part.trim();
+            if (part.startsWith("\"")) { // Es una cadena
+                String str = part.substring(1, part.length() - 1);
+                String strLabel = "str" + strCount++;
+                // La declaración de la cadena se manejará en la pasada de recopilación de datos
+                assemblyCode.add("    mov rax, 1 ; sys_write");
+                assemblyCode.add("    mov rdi, 1 ; stdout");
+                assemblyCode.add("    mov rsi, " + strLabel);
+                assemblyCode.add("    mov rdx, " + str.length()); // Longitud exacta de la cadena
+                assemblyCode.add("    syscall");
+            } else { // Es una variable
+                assemblyCode.add("    ; Escribiendo valor de " + part);
+                assemblyCode.add("    mov eax, [" + part + "]");
+                assemblyCode.add("    call _printRAX");
+            }
         }
     }
 
@@ -205,10 +207,17 @@ public class AssemblyGenerator {
 
         // Primera pasada: encontrar todas las cadenas para la sección .data
         for (String instruction : threeAddressCode) {
-            if (instruction.trim().startsWith("write") && instruction.contains("\"")) {
-                String value = instruction.substring(instruction.indexOf("\"") + 1, instruction.lastIndexOf("\""));
-                String strLabel = "str" + strCount++;
-                dataSection.add(strLabel + " db '" + value + "', 0xa");
+            if (instruction.trim().startsWith("write")) {
+                String content = instruction.substring(5).trim();
+                String[] parts = content.split(",");
+                for (String part : parts) {
+                    part = part.trim();
+                    if (part.startsWith("\"")) {
+                        String str = part.substring(1, part.length() - 1);
+                        String strLabel = "str" + strCount++;
+                        dataSection.add(strLabel + " db '" + str + "'");
+                    }
+                }
             }
         }
 
