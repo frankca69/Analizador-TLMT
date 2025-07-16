@@ -23,4 +23,4 @@ Proceso PruebaSintacticaRefinada
     Escribir "A y B son iguales.";
   FinSi
 
-FinProceso
+FinProcesoa
