@@ -18,7 +18,7 @@ public class AnalizadorAppGUI extends JFrame {
     private JTextArea areaArbolSemantico; // Nueva área para el árbol semántico
     private JTextArea areaCodigoTresDirecciones; // Nueva área para el Código de 3 Direcciones
     private JTextArea areaCodigoOptimizado; // Nueva área para el Código Optimizado
-    private JTextArea areaCodigoAssembler; // Nueva área para el Código Assembler
+    private JTextArea areaCodigoAssembler;
     private JTable tablaSimbolos;
     private JLabel etiquetaEstado;
     private TokenTableModel tokenTableModel;
@@ -103,7 +103,7 @@ public class AnalizadorAppGUI extends JFrame {
         areaCodigoAssembler.setEditable(false);
         areaCodigoAssembler.setFont(new Font("Monospaced", Font.PLAIN, 12));
         JScrollPane scrollCodigoAssembler = new JScrollPane(areaCodigoAssembler);
-        panelPestanasSalida.addTab("Assembler", scrollCodigoAssembler);
+        panelPestanasSalida.addTab("Cód. Assembler", scrollCodigoAssembler);
 
         // Pestaña para Tabla de Símbolos
         simboloTableModel = new SimboloTableModel();
@@ -235,11 +235,10 @@ public class AnalizadorAppGUI extends JFrame {
                 areaCodigoOptimizado.setCaretPosition(0);
 
                 // Generación de Código Assembler
-                AssemblyGenerator assembler = new AssemblyGenerator(optimizedCode);
-                List<String> assemblyCode = assembler.generate();
-                areaCodigoAssembler.setText(String.join("\n", assemblyCode));
+                AssemblyGenerator assembler = new AssemblyGenerator(optimizedCode, tablaSimbolosObj);
+                String assemblyCode = assembler.generate();
+                areaCodigoAssembler.setText(assemblyCode);
                 areaCodigoAssembler.setCaretPosition(0);
-
 
             } else {
                 // Esto podría pasar si parse() devuelve null incluso sin errores en la lista,

@@ -88,10 +88,11 @@ public class ThreeAddressCodeGenerator {
     }
 
     private void visitEscribirNode(EscribirNode node) {
+        List<String> expressions = new ArrayList<>();
         for (NodoAST expr : node.getExpresiones()) {
-            String result = visitExpression(expr);
-            code.add("write " + result);
+            expressions.add(visitExpression(expr));
         }
+        code.add("Escribir " + String.join(", ", expressions));
     }
 
     private void visitLeerNode(LeerNode node) {

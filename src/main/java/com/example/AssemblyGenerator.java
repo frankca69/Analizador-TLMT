@@ -7,139 +7,206 @@ import java.util.Map;
 
 public class AssemblyGenerator {
 
-    private List<String> threeAddressCode;
-    private List<String> assemblyCode;
-    private Map<String, String> variables = new HashMap<>();
-    private List<String> strings = new ArrayList<>();
+    private List<String> optimizedCode;
+    private TablaDeSimbolos symbolTable;
+    private StringBuilder dataSection;
+    private StringBuilder textSection;
+    private Map<String, String> stringLiterals;
+    private int stringLiteralCounter;
+    private Map<String, String> tempVarReplacements;
 
-    public AssemblyGenerator(List<String> threeAddressCode) {
-        this.threeAddressCode = threeAddressCode;
-        this.assemblyCode = new ArrayList<>();
+    public AssemblyGenerator(List<String> optimizedCode, TablaDeSimbolos symbolTable) {
+        this.optimizedCode = optimizedCode;
+        this.symbolTable = symbolTable;
+        this.dataSection = new StringBuilder();
+        this.textSection = new StringBuilder();
+        this.stringLiterals = new HashMap<>();
+        this.stringLiteralCounter = 1;
+        this.tempVarReplacements = new HashMap<>();
     }
 
+    public String generate() {
+        // Inicializar secciones
+        dataSection.append("section .data\n");
 
-    private void generateHeader() {
-        assemblyCode.add("section .bss");
-        declareVariables();
-        assemblyCode.add("section .data");
-        // Aquí se podrían definir datos, como strings para Escribir.
-        assemblyCode.add("section .text");
-        assemblyCode.add("global _start");
-    }
-
-
-    private void declareVariables() {
-        // Ya no se declaran en .bss. Se declararán en .data sobre la marcha.
-    }
-
-    private boolean isVariable(String s) {
-        // Una suposición simple: si no es un número y no es una palabra clave, es una variable.
-        // Esto debería ser más robusto en un compilador real.
-        return !isNumeric(s) && !s.endsWith(":") && !s.equals("goto") && !s.equals("if_false") && !s.equals("write") && !s.equals("read") && !s.equals("start_program") && !s.equals("end_program");
-    }
-
-    private int stringIndex = 0;
-    private void translateInstructions() {
-        assemblyCode.add("_start:");
-        stringIndex = 0;
-        for (String instruction : threeAddressCode) {
-            instruction = instruction.trim();
-            String[] parts = instruction.split(" ");
-
-            if (parts.length > 2 && parts[1].equals("=")) { // Asignación
-                handleAssignment(instruction);
-            } else if (instruction.startsWith("write")) {
-                handleWrite(instruction);
+        // Declarar variables
+        for (Simbolo symbol : symbolTable.getSimbolosAsCollection()) {
+            if (symbol.getTipo().equals("Entero")) {
+                dataSection.append(String.format("    %s dd 0\n", symbol.getNombre()));
             }
         }
+
+        // Encontrar reemplazos de variables temporales
+        for (int i = 0; i < optimizedCode.size() - 1; i++) {
+            String line1 = optimizedCode.get(i);
+            String line2 = optimizedCode.get(i + 1);
+
+            String[] parts1 = line1.split(" ");
+            String[] parts2 = line2.split(" ");
+
+            if (parts1.length == 5 && parts2.length == 3 && parts2[1].equals("=") && parts1[0].equals(parts2[2])) {
+                tempVarReplacements.put(parts1[0], parts2[0]);
+            }
+        }
+
+        textSection.append("section .text\n");
+        textSection.append("    global _start\n\n");
+
+        // Código boilerplate para imprimir números
+        textSection.append("print_number:\n");
+        textSection.append("    push rbx\n");
+        textSection.append("    push rcx\n");
+        textSection.append("    push rdx\n");
+        textSection.append("    push rsi\n");
+        textSection.append("    mov ebx, 10\n");
+        textSection.append("    mov ecx, 0\n");
+        textSection.append("    mov rsi, buffer + 11\n");
+        textSection.append("    mov byte [rsi], 0\n");
+        textSection.append("    cmp eax, 0\n");
+        textSection.append("    jne convert_loop\n");
+        textSection.append("    dec rsi\n");
+        textSection.append("    mov byte [rsi], '0'\n");
+        textSection.append("    inc ecx\n");
+        textSection.append("    jmp print_it\n");
+        textSection.append("convert_loop:\n");
+        textSection.append("    cmp eax, 0\n");
+        textSection.append("    je print_it\n");
+        textSection.append("    xor edx, edx\n");
+        textSection.append("    div ebx\n");
+        textSection.append("    add dl, '0'\n");
+        textSection.append("    dec rsi\n");
+        textSection.append("    mov [rsi], dl\n");
+        textSection.append("    inc ecx\n");
+        textSection.append("    jmp convert_loop\n");
+        textSection.append("print_it:\n");
+        textSection.append("    mov rax, 1\n");
+        textSection.append("    mov rdi, 1\n");
+        textSection.append("    mov rdx, rcx\n");
+        textSection.append("    syscall\n");
+        textSection.append("    pop rsi\n");
+        textSection.append("    pop rdx\n");
+        textSection.append("    pop rcx\n");
+        textSection.append("    pop rbx\n");
+        textSection.append("    ret\n\n");
+
+        textSection.append("_start:\n");
+
+        // Procesar código optimizado
+        for (String line : optimizedCode) {
+            processLine(line);
+        }
+
+        // Finalizar syscall
+        textSection.append("    mov rax, 60\n");
+        textSection.append("    mov rdi, 0\n");
+        textSection.append("    syscall\n");
+
+        // Añadir literales de cadena y buffer a .data
+        for (Map.Entry<String, String> entry : stringLiterals.entrySet()) {
+            dataSection.append(String.format("    %s db %s, 0\n", entry.getValue(), entry.getKey()));
+        }
+        dataSection.append("    newline db 10, 0\n");
+        dataSection.append("    buffer db 12 dup(0)\n");
+
+        return dataSection.toString() + "\n" + textSection.toString();
     }
 
-    private List<String> declaredVariables = new ArrayList<>();
+    private void processLine(String line) {
+        for (Map.Entry<String, String> entry : tempVarReplacements.entrySet()) {
+            line = line.replace(entry.getKey(), entry.getValue());
+        }
 
-    private void handleAssignment(String instruction) {
-        String[] parts = instruction.split("=");
-        String dest = parts[0].trim();
-        String expr = parts[1].trim();
-        String[] exprParts = expr.split(" ");
+        String[] parts = line.split(" ");
+        if (parts.length == 0) return;
 
-        if (exprParts.length == 1) { // Asignación simple: a = 10 o a = b
-            if (isNumeric(exprParts[0])) {
-                assemblyCode.add("    mov dword [" + dest + "], " + exprParts[0]);
-            } else {
-                assemblyCode.add("    mov eax, [" + exprParts[0] + "]");
-                assemblyCode.add("    mov [" + dest + "], eax");
-            }
-        } else if (exprParts.length == 3) { // Expresión binaria: t0 = a + 5
-            String op1 = exprParts[0];
-            String op = exprParts[1];
-            String op2 = exprParts[2];
+        if (line.contains("=") && parts.length == 3 && parts[0].equals(parts[2])) {
+            // Es una asignación redundante (c = c), la ignoramos
+            return;
+        }
 
-            // Mover el primer operando a un registro
-            if(isNumeric(op1)) {
-                assemblyCode.add("    mov eax, " + op1);
-            } else {
-                assemblyCode.add("    mov eax, [" + op1 + "]");
-            }
-
-            // Realizar la operación con el segundo operando
-            if (op.equals("+")) {
-                if(isNumeric(op2)) {
-                    assemblyCode.add("    add eax, " + op2);
+        if (line.contains("=")) {
+            // a = 5
+            // c = a + b
+            String dest = parts[0];
+            if (parts.length == 3) {
+                // Asignación simple
+                String source = parts[2];
+                if (isNumeric(source)) {
+                    textSection.append(String.format("    mov dword [%s], %s\n", dest, source));
                 } else {
-                    assemblyCode.add("    add eax, [" + op2 + "]");
+                    textSection.append(String.format("    mov eax, [%s]\n", source));
+                    textSection.append(String.format("    mov [%s], eax\n", dest));
                 }
-            } else if (op.equals("-")) {
-                 if(isNumeric(op2)) {
-                    assemblyCode.add("    sub eax, " + op2);
+            } else if (parts.length == 5) {
+                // Operación binaria
+                String op1 = parts[2];
+                String operator = parts[3];
+                String op2 = parts[4];
+
+                if (isNumeric(op1)) {
+                    textSection.append(String.format("    mov eax, %s\n", op1));
                 } else {
-                    assemblyCode.add("    sub eax, [" + op2 + "]");
+                    textSection.append(String.format("    mov eax, [%s]\n", op1));
                 }
-            }
-            // ... (añadir más operaciones como *, /)
 
-            // Guardar el resultado
-            assemblyCode.add("    mov [" + dest + "], eax");
+                if (isNumeric(op2)) {
+                    textSection.append(String.format("    mov ebx, %s\n", op2));
+                } else {
+                    textSection.append(String.format("    mov ebx, [%s]\n", op2));
+                }
+
+
+                switch (operator) {
+                    case "+":
+                        textSection.append("    add eax, ebx\n");
+                        break;
+                    case "-":
+                        textSection.append("    sub eax, ebx\n");
+                        break;
+                    // Faltan otros operadores
+                }
+                textSection.append(String.format("    mov [%s], eax\n", dest));
+            }
+        } else if (parts[0].equals("Escribir")) {
+            handleEscribir(line);
         }
     }
 
-    private int strCount = 0;
-
-    private void handleWrite(String instruction) {
-        String content = instruction.substring(5).trim();
-        String[] parts = content.split(",");
-        for (String part : parts) {
-            part = part.trim();
-            if (part.startsWith("\"")) { // Es una cadena
-                String str = part.substring(1, part.length() - 1);
-                String strLabel = "str" + strCount++;
-                // La declaración de la cadena se manejará en la pasada de recopilación de datos
-                assemblyCode.add("    mov rax, 1 ; sys_write");
-                assemblyCode.add("    mov rdi, 1 ; stdout");
-                assemblyCode.add("    mov rsi, " + strLabel);
-                assemblyCode.add("    mov rdx, " + str.length()); // Longitud exacta de la cadena
-                assemblyCode.add("    syscall");
-            } else { // Es una variable
-                assemblyCode.add("    ; Escribiendo valor de " + part);
-                assemblyCode.add("    mov eax, [" + part + "]");
-                assemblyCode.add("    call _printRAX");
+    private void handleEscribir(String line) {
+        // Escribir "La suma de ", a, " y ", b, " es: ", c;
+        String content = line.substring("Escribir".length()).trim();
+        String[] items = content.split(",");
+        for (String item : items) {
+            item = item.trim().replace(";", "");
+            if (item.startsWith("\"") && item.endsWith("\"")) {
+                // Es un literal de cadena
+                String literal = item;
+                String label = getStringLiteralLabel(literal);
+                textSection.append(String.format("    mov rax, 1\n"));
+                textSection.append(String.format("    mov rdi, 1\n"));
+                textSection.append(String.format("    mov rsi, %s\n", label));
+                textSection.append(String.format("    mov rdx, %d\n", literal.length() - 2));
+                textSection.append(String.format("    syscall\n"));
+            } else {
+                // Es una variable
+                textSection.append(String.format("    mov eax, [%s]\n", item));
+                textSection.append("    call print_number\n");
             }
         }
+        textSection.append("    mov rax, 1\n");
+        textSection.append("    mov rdi, 1\n");
+        textSection.append("    mov rsi, newline\n");
+        textSection.append("    mov rdx, 1\n");
+        textSection.append("    syscall\n");
     }
 
-    private void handleRead(String instruction) {
-        // Similar a write, leer de la entrada estándar es complejo.
-        String var = instruction.substring(5).trim();
-        assemblyCode.add("    ; Leyendo valor para " + var);
-        assemblyCode.add("    ; ... (código para leer de stdin y guardarlo en la variable)");
-    }
-
-    private void handleConditionalJump(String instruction) {
-        String[] parts = instruction.split(" ");
-        String conditionVar = parts[1];
-        String label = parts[3];
-        assemblyCode.add("    mov al, [" + conditionVar + "]");
-        assemblyCode.add("    cmp al, 0");
-        assemblyCode.add("    je " + label); // Saltar si el resultado de la condición es falso (0)
+    private String getStringLiteralLabel(String literal) {
+        if (stringLiterals.containsKey(literal)) {
+            return stringLiterals.get(literal);
+        }
+        String label = "msg" + (stringLiteralCounter++);
+        stringLiterals.put(literal, label);
+        return label;
     }
 
     private boolean isNumeric(String str) {
@@ -149,124 +216,5 @@ public class AssemblyGenerator {
         } catch (NumberFormatException e) {
             return false;
         }
-    }
-
-    private void generateFooter() {
-        assemblyCode.add("    mov rax, 60         ; sys_exit");
-        assemblyCode.add("    mov rdi, 0          ; código de salida");
-        assemblyCode.add("    syscall");
-        assemblyCode.add("");
-        assemblyCode.add("print_number:");
-        assemblyCode.add("    push rbx");
-        assemblyCode.add("    push rcx");
-        assemblyCode.add("    push rdx");
-        assemblyCode.add("    push rsi");
-        assemblyCode.add("    ");
-        assemblyCode.add("    mov ebx, 10");
-        assemblyCode.add("    mov ecx, 0");
-        assemblyCode.add("    mov rsi, buffer + 11");
-        assemblyCode.add("    mov byte [rsi], 0");
-        assemblyCode.add("    ");
-        assemblyCode.add("    cmp eax, 0");
-        assemblyCode.add("    jne convert_loop");
-        assemblyCode.add("    dec rsi");
-        assemblyCode.add("    mov byte [rsi], '0'");
-        assemblyCode.add("    inc ecx");
-        assemblyCode.add("    jmp print_it");
-        assemblyCode.add("    ");
-        assemblyCode.add("convert_loop:");
-        assemblyCode.add("    cmp eax, 0");
-        assemblyCode.add("    je print_it");
-        assemblyCode.add("    ");
-        assemblyCode.add("    xor edx, edx");
-        assemblyCode.add("    div ebx");
-        assemblyCode.add("    add dl, '0'");
-        assemblyCode.add("    dec rsi");
-        assemblyCode.add("    mov [rsi], dl");
-        assemblyCode.add("    inc ecx");
-        assemblyCode.add("    jmp convert_loop");
-        assemblyCode.add("    ");
-        assemblyCode.add("print_it:");
-        assemblyCode.add("    mov rax, 1");
-        assemblyCode.add("    mov rdi, 1");
-        assemblyCode.add("    mov rdx, rcx");
-        assemblyCode.add("    syscall");
-        assemblyCode.add("    ");
-        assemblyCode.add("    pop rsi");
-        assemblyCode.add("    pop rdx");
-        assemblyCode.add("    pop rcx");
-        assemblyCode.add("    pop rbx");
-        assemblyCode.add("    ret");
-    }
-
-    public List<String> generate() {
-        List<String> dataSection = new ArrayList<>();
-        strCount = 0;
-
-        // Primera pasada: encontrar todas las cadenas para la sección .data
-        for (String instruction : threeAddressCode) {
-            if (instruction.trim().startsWith("write")) {
-                String content = instruction.substring(5).trim();
-                String[] parts = content.split(",");
-                for (String part : parts) {
-                    part = part.trim();
-                    if (part.startsWith("\"")) {
-                        String str = part.substring(1, part.length() - 1);
-                        String strLabel = "str" + strCount++;
-                        dataSection.add(strLabel + " db '" + str + "'");
-                    }
-                }
-            }
-        }
-
-        generateHeader();
-        assemblyCode.addAll(dataSection);
-        translateInstructions();
-        generateFooter();
-        // Asegurarse de que el búfer de impresión esté en .bss
-        assemblyCode.add(1, "print_buffer resb 12");
-        return assemblyCode;
-    }
-
-    private void handleComparison(String instruction) {
-        String[] parts = instruction.split(" ");
-        String dest = parts[0].trim();
-        String op1 = parts[2].trim();
-        String op = parts[3].trim();
-        String op2 = parts[4].trim();
-
-        if(isNumeric(op1)) {
-            assemblyCode.add("    mov eax, " + op1);
-        } else {
-            assemblyCode.add("    mov eax, [" + op1 + "]");
-        }
-
-        if(isNumeric(op2)) {
-            assemblyCode.add("    cmp eax, " + op2);
-        } else {
-            assemblyCode.add("    cmp eax, [" + op2 + "]");
-        }
-
-        String trueLabel = newLabel();
-        String endLabel = newLabel();
-
-        if (op.equals(">")) {
-            assemblyCode.add("    jg " + trueLabel);
-        } else if (op.equals("<")) {
-            assemblyCode.add("    jl " + trueLabel);
-        } else if (op.equals("==")) {
-            assemblyCode.add("    je " + trueLabel);
-        }
-        // ... (añadir más comparaciones)
-
-        assemblyCode.add("    mov byte [" + dest + "], 0 ; false");
-        assemblyCode.add("    jmp " + endLabel);
-        assemblyCode.add(trueLabel + ":");
-        assemblyCode.add("    mov byte [" + dest + "], 1 ; true");
-        assemblyCode.add(endLabel + ":");
-    }
-
-    private String newLabel() {
-        return "L" + (assemblyCode.size() + 100); // Un método simple para generar etiquetas únicas
     }
 }
