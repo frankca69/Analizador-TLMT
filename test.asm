@@ -1,63 +1,92 @@
 section .bss
 print_buffer resb 12
-a resd 1
-b resd 1
-c resd 1
-t0 resd 1
 section .data
-str0 db 'La suma de '
-str1 db ' y '
-str2 db ' es: '
+    a dd 0
+    b dd 0
+    c dd 0
+    msg0 db "La suma de ", 0
+    msg1 db " y ", 0
+    msg2 db " es: ", 0
+    newline db 10, 0
+    buffer db 12 dup(0)
+
 section .text
-global _start
+    global _start
+
 _start:
     mov dword [a], 5
     mov dword [b], 7
     mov eax, [a]
     add eax, [b]
-    mov [t0], eax
-    mov eax, [t0]
     mov [c], eax
     mov rax, 1
     mov rdi, 1
-    mov rsi, str0
+    mov rsi, msg0
     mov rdx, 11
     syscall
     mov eax, [a]
-    call _printRAX
+    call print_number
     mov rax, 1
     mov rdi, 1
-    mov rsi, str1
+    mov rsi, msg1
     mov rdx, 3
     syscall
     mov eax, [b]
-    call _printRAX
+    call print_number
     mov rax, 1
     mov rdi, 1
-    mov rsi, str2
+    mov rsi, msg2
     mov rdx, 5
     syscall
     mov eax, [c]
-    call _printRAX
-    mov rax, 60
-    xor rdi, rdi
-    syscall
-_printRAX:
-    mov rsi, print_buffer + 10
-    mov byte [print_buffer + 11], 0xa
-    mov r10, 10
-_printRAX_loop:
-    xor rdx, rdx
-    div r10
-    add dl, '0'
-    mov [rsi], dl
-    dec rsi
-    test rax, rax
-    jnz _printRAX_loop
-    inc rsi
-    mov rdx, print_buffer + 12
-    sub rdx, rsi
+    call print_number
     mov rax, 1
     mov rdi, 1
+    mov rsi, newline
+    mov rdx, 1
     syscall
+    mov rax, 60
+    mov rdi, 0
+    syscall
+
+print_number:
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+
+    mov ebx, 10
+    mov ecx, 0
+    mov rsi, buffer + 11
+    mov byte [rsi], 0
+
+    cmp eax, 0
+    jne convert_loop
+    dec rsi
+    mov byte [rsi], '0'
+    inc ecx
+    jmp print_it
+
+convert_loop:
+    cmp eax, 0
+    je print_it
+
+    xor edx, edx
+    div ebx
+    add dl, '0'
+    dec rsi
+    mov [rsi], dl
+    inc ecx
+    jmp convert_loop
+
+print_it:
+    mov rax, 1
+    mov rdi, 1
+    mov rdx, rcx
+    syscall
+
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
     ret

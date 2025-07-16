@@ -1,12 +1,16 @@
 package com.example;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class AssemblyGenerator {
 
     private List<String> threeAddressCode;
     private List<String> assemblyCode;
+    private Map<String, String> variables = new HashMap<>();
+    private List<String> strings = new ArrayList<>();
 
     public AssemblyGenerator(List<String> threeAddressCode) {
         this.threeAddressCode = threeAddressCode;
@@ -23,25 +27,9 @@ public class AssemblyGenerator {
         assemblyCode.add("global _start");
     }
 
+
     private void declareVariables() {
-        for (String instruction : threeAddressCode) {
-            String[] parts = instruction.split(" ");
-            if (parts.length > 0) {
-                String var = parts[0].trim();
-                if (isVariable(var)) {
-                    // Asegurarse de no declarar la misma variable dos veces
-                    if (assemblyCode.stream().noneMatch(line -> line.startsWith(var + " "))) {
-                        assemblyCode.add(var + " resd 1"); // Reservar 1 dword (4 bytes) para cada variable
-                    }
-                }
-            }
-            if (parts.length > 2 && isVariable(parts[2].trim())) {
-                 String var = parts[2].trim();
-                 if (assemblyCode.stream().noneMatch(line -> line.startsWith(var + " "))) {
-                        assemblyCode.add(var + " resd 1");
-                 }
-            }
-        }
+        // Ya no se declaran en .bss. Se declararán en .data sobre la marcha.
     }
 
     private boolean isVariable(String s) {
@@ -50,33 +38,23 @@ public class AssemblyGenerator {
         return !isNumeric(s) && !s.endsWith(":") && !s.equals("goto") && !s.equals("if_false") && !s.equals("write") && !s.equals("read") && !s.equals("start_program") && !s.equals("end_program");
     }
 
+    private int stringIndex = 0;
     private void translateInstructions() {
         assemblyCode.add("_start:");
+        stringIndex = 0;
         for (String instruction : threeAddressCode) {
             instruction = instruction.trim();
-            if (instruction.endsWith(":")) {
-                assemblyCode.add(instruction); // Añade la etiqueta
-            } else if (instruction.startsWith("start_program")) {
-                // No se necesita acción específica para start_program en este punto
-            } else if (instruction.startsWith("end_program")) {
-                // La salida ya se maneja en el pie de página
-            } else if (instruction.contains("=")) {
-                if (instruction.contains(">") || instruction.contains("<") || instruction.contains("==")) {
-                    handleComparison(instruction);
-                } else {
-                    handleAssignment(instruction);
-                }
+            String[] parts = instruction.split(" ");
+
+            if (parts.length > 2 && parts[1].equals("=")) { // Asignación
+                handleAssignment(instruction);
             } else if (instruction.startsWith("write")) {
                 handleWrite(instruction);
-            } else if (instruction.startsWith("read")) {
-                handleRead(instruction);
-            } else if (instruction.startsWith("goto")) {
-                assemblyCode.add("    jmp " + instruction.substring(5).trim());
-            } else if (instruction.startsWith("if_false")) {
-                handleConditionalJump(instruction);
             }
         }
     }
+
+    private List<String> declaredVariables = new ArrayList<>();
 
     private void handleAssignment(String instruction) {
         String[] parts = instruction.split("=");
@@ -174,30 +152,50 @@ public class AssemblyGenerator {
     }
 
     private void generateFooter() {
-        // Salida del programa
-        assemblyCode.add("    mov rax, 60  ; syscall para exit");
-        assemblyCode.add("    xor rdi, rdi ; código de salida 0");
+        assemblyCode.add("    mov rax, 60         ; sys_exit");
+        assemblyCode.add("    mov rdi, 0          ; código de salida");
         assemblyCode.add("    syscall");
-
-        // Función para imprimir un número en EAX
-        assemblyCode.add("_printRAX:");
-        assemblyCode.add("    mov rsi, print_buffer + 10");
-        assemblyCode.add("    mov byte [print_buffer + 11], 0xa ; newline");
-        assemblyCode.add("    mov r10, 10");
-        assemblyCode.add("_printRAX_loop:");
-        assemblyCode.add("    xor rdx, rdx");
-        assemblyCode.add("    div r10");
-        assemblyCode.add("    add dl, '0'");
-        assemblyCode.add("    mov [rsi], dl");
+        assemblyCode.add("");
+        assemblyCode.add("print_number:");
+        assemblyCode.add("    push rbx");
+        assemblyCode.add("    push rcx");
+        assemblyCode.add("    push rdx");
+        assemblyCode.add("    push rsi");
+        assemblyCode.add("    ");
+        assemblyCode.add("    mov ebx, 10");
+        assemblyCode.add("    mov ecx, 0");
+        assemblyCode.add("    mov rsi, buffer + 11");
+        assemblyCode.add("    mov byte [rsi], 0");
+        assemblyCode.add("    ");
+        assemblyCode.add("    cmp eax, 0");
+        assemblyCode.add("    jne convert_loop");
         assemblyCode.add("    dec rsi");
-        assemblyCode.add("    test rax, rax");
-        assemblyCode.add("    jnz _printRAX_loop");
-        assemblyCode.add("    inc rsi");
-        assemblyCode.add("    mov rdx, print_buffer + 12");
-        assemblyCode.add("    sub rdx, rsi");
+        assemblyCode.add("    mov byte [rsi], '0'");
+        assemblyCode.add("    inc ecx");
+        assemblyCode.add("    jmp print_it");
+        assemblyCode.add("    ");
+        assemblyCode.add("convert_loop:");
+        assemblyCode.add("    cmp eax, 0");
+        assemblyCode.add("    je print_it");
+        assemblyCode.add("    ");
+        assemblyCode.add("    xor edx, edx");
+        assemblyCode.add("    div ebx");
+        assemblyCode.add("    add dl, '0'");
+        assemblyCode.add("    dec rsi");
+        assemblyCode.add("    mov [rsi], dl");
+        assemblyCode.add("    inc ecx");
+        assemblyCode.add("    jmp convert_loop");
+        assemblyCode.add("    ");
+        assemblyCode.add("print_it:");
         assemblyCode.add("    mov rax, 1");
         assemblyCode.add("    mov rdi, 1");
+        assemblyCode.add("    mov rdx, rcx");
         assemblyCode.add("    syscall");
+        assemblyCode.add("    ");
+        assemblyCode.add("    pop rsi");
+        assemblyCode.add("    pop rdx");
+        assemblyCode.add("    pop rcx");
+        assemblyCode.add("    pop rbx");
         assemblyCode.add("    ret");
     }
 
