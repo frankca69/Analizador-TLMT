@@ -1,0 +1,145 @@
+Input:
+Proceso PruebaSintacticaRefinada
+  Definir a, b, resultado Como Entero;
+  Definir condicion Como Logico;
+  // Valores predefinidos en el código
+  a <- 15;
+  b <- 10;
+
+  resultado <- a + b;
+  condicion <- a > b;
+  Escribir "Valores: a = ", a, ", b = ", b;
+  Escribir "Resultado: ", resultado;
+  Escribir "Condicion: ", condicion;
+  Si condicion Entonces
+    Escribir "A es mayor que B.";
+  SiNo
+    Escribir "A es menor que B.";
+  FinSi
+  Si a == b Entonces
+    Escribir "A y B son iguales.";
+  FinSi
+FinProceso
+
+Cod 3 direcciones: 
+DECLARE a ENTERO
+DECLARE b ENTERO
+DECLARE resultado ENTERO
+DECLARE condicion BOOLEAN
+t0 = 15
+a = t0
+t1 = 10
+b = t1
+t2 = a + b
+resultado = t2
+t3 = a > b
+condicion = t3
+PRINT "Valores: a = ", a, ", b = ", b
+PRINT "Resultado: ", resultado
+PRINT "Condicion: ", condicion
+IF condicion GOTO L0
+GOTO L1
+L0:
+PRINT "A es mayor que B."
+GOTO L2
+L1:
+PRINT "A es menor que B."
+GOTO L2
+L2:
+t4 = a == b
+IF t4 GOTO L3
+GOTO L5
+L3:
+PRINT "A y B son iguales."
+GOTO L5
+L5:
+END
+
+Cod optimizado:
+DECLARE a ENTERO
+DECLARE b ENTERO
+DECLARE resultado ENTERO
+DECLARE condicion BOOLEAN
+a = t0
+b = t1
+resultado = t2
+condicion = t3
+PRINT "Valores: 15 = ", a, ", 10 = ", 10
+PRINT "Resultado: ", t2
+PRINT "Condicion: ", t3
+IF condicion GOTO L0
+GOTO L1
+L0:
+PRINT "A es mayor que B."
+GOTO L2
+L1:
+PRINT "A es menor que B."
+GOTO L2
+L2:
+IF t4 GOTO L3
+GOTO L5
+L3:
+PRINT "A y B son iguales."
+GOTO L5
+L5:
+END
+
+Cod. Assembly:
+section .data
+    a dd 0
+    b dd 0
+    resultado dd 0
+    newline db 10, 0
+    buffer db 12 dup(0)
+
+section .text
+    global _start
+
+print_number:
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    mov ebx, 10
+    mov ecx, 0
+    mov rsi, buffer + 11
+    mov byte [rsi], 0
+    cmp eax, 0
+    jne convert_loop
+    dec rsi
+    mov byte [rsi], '0'
+    inc ecx
+    jmp print_it
+convert_loop:
+    cmp eax, 0
+    je print_it
+    xor edx, edx
+    div ebx
+    add dl, '0'
+    dec rsi
+    mov [rsi], dl
+    inc ecx
+    jmp convert_loop
+print_it:
+    mov rax, 1
+    mov rdi, 1
+    mov rdx, rcx
+    syscall
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    ret
+
+_start:
+    mov eax, [t0]
+    mov [a], eax
+    mov eax, [t1]
+    mov [b], eax
+    mov eax, [t2]
+    mov [resultado], eax
+    mov eax, [t3]
+    mov [condicion], eax
+    mov rax, 60
+    mov rdi, 0
+    syscall
