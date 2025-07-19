@@ -6,8 +6,8 @@ import java.util.List;
 
 public class ThreeAddressCodeGenerator {
 
-    private int labelCount = 0;
-    private int tempCount = 0;
+    private int labelCount = 1;
+    private int tempCount = 1;
     private final List<String> code = new ArrayList<>();
 
     public List<String> generate(ProgramaNode programNode) {
@@ -141,7 +141,6 @@ public class ThreeAddressCodeGenerator {
             code.add("read " + var.getNombre());
         }
     }
-
 
     private String visitExpression(NodoAST node) {
         if (node instanceof LiteralNode) {
