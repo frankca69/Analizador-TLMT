@@ -13,7 +13,8 @@ public class AssemblyGenerator {
     private StringBuilder textSection;
     private Map<String, String> stringLiterals;
     private int stringLiteralCounter;
-    private Map<String, String> tempVarValues; // Para almacenar valores de variables temporales
+    private Map<String, String> tempVarValues;
+    private Map<String, String> declaredVariables; // Nuevas variables detectadas
 
     public AssemblyGenerator(List<String> optimizedCode, TablaDeSimbolos symbolTable) {
         this.optimizedCode = optimizedCode;
@@ -23,22 +24,38 @@ public class AssemblyGenerator {
         this.stringLiterals = new HashMap<>();
         this.stringLiteralCounter = 1;
         this.tempVarValues = new HashMap<>();
+        this.declaredVariables = new HashMap<>();
     }
 
     public String generate() {
+        // Primer pase: detectar todas las variables declaradas
+        detectVariables();
+
         // Inicializar secciones
         dataSection.append("section .data\n");
 
-        // Declarar variables (solo las declaradas explícitamente, no temporales)
+        // Declarar variables de la tabla de símbolos
         for (Simbolo symbol : symbolTable.getSimbolosAsCollection()) {
             if (symbol.getTipo().equals("Entero") || symbol.getTipo().equals("ENTERO")) {
                 dataSection.append(String.format("    %s dd 0\n", symbol.getNombre()));
-            } else if (symbol.getTipo().equals("Boolean") || symbol.getTipo().equals("BOOLEAN")) {
+                declaredVariables.put(symbol.getNombre(), "ENTERO");
+            } else if (symbol.getTipo().equals("Boolean") || symbol.getTipo().equals("BOOLEAN")
+                    || symbol.getTipo().equals("Logico") || symbol.getTipo().equals("LOGICO")) {
                 dataSection.append(String.format("    %s dd 0\n", symbol.getNombre()));
+                declaredVariables.put(symbol.getNombre(), "BOOLEAN");
             }
         }
 
-        textSection.append("section .text\n");
+        // Declarar variables adicionales detectadas en el código optimizado
+        for (Map.Entry<String, String> entry : declaredVariables.entrySet()) {
+            String varName = entry.getKey();
+            // Solo declarar si no fue declarada por la tabla de símbolos
+            if (!isInSymbolTable(varName)) {
+                dataSection.append(String.format("    %s dd 0\n", varName));
+            }
+        }
+
+        textSection.append("\nsection .text\n");
         textSection.append("    global _start\n\n");
 
         // Código boilerplate para imprimir números
@@ -52,51 +69,109 @@ public class AssemblyGenerator {
         }
 
         // Finalizar programa
+        textSection.append("\n    ; Terminar programa\n");
         textSection.append("    mov rax, 60\n");
         textSection.append("    mov rdi, 0\n");
         textSection.append("    syscall\n");
 
         // Añadir literales de cadena y buffer a .data
         for (Map.Entry<String, String> entry : stringLiterals.entrySet()) {
-            dataSection.append(String.format("    %s db %s, 0\n", entry.getValue(), entry.getKey()));
+            String literal = entry.getKey();
+            String content = literal.substring(1, literal.length() - 1); // Quitar comillas
+            dataSection.append(String.format("    %s db '%s', 0\n", entry.getValue(), content));
         }
-        dataSection.append("    newline db 10, 0\n");
-        dataSection.append("    buffer db 12 dup(0)\n");
+        if (!stringLiterals.isEmpty()) {
+            dataSection.append("    newline db 10, 0\n");
+            dataSection.append("    buffer db 12 dup(0)\n");
+        }
 
-        return dataSection.toString() + "\n" + textSection.toString();
+        return dataSection.toString() + textSection.toString();
+    }
+
+    private void detectVariables() {
+        for (String line : optimizedCode) {
+            line = line.trim();
+            if (line.isEmpty() || line.equals("END"))
+                continue;
+
+            String[] parts = line.split(" ");
+
+            // Detectar declaraciones DECLARE
+            if (parts.length >= 3 && parts[0].equals("DECLARE")) {
+                String varName = parts[1];
+                String type = parts[2];
+                declaredVariables.put(varName, type);
+            }
+
+            // Detectar asignaciones para encontrar variables no declaradas
+            if (line.contains(" = ")) {
+                String[] assignParts = line.split(" = ");
+                if (assignParts.length == 2) {
+                    String varName = assignParts[0].trim();
+                    // Si no está en la tabla de símbolos y no la hemos visto antes
+                    if (!isInSymbolTable(varName) && !declaredVariables.containsKey(varName)) {
+                        // Inferir el tipo basado en el valor asignado
+                        String value = assignParts[1].trim();
+                        if (value.equalsIgnoreCase("TRUE") || value.equalsIgnoreCase("FALSE")) {
+                            declaredVariables.put(varName, "BOOLEAN");
+                        } else if (isNumeric(value)) {
+                            declaredVariables.put(varName, "ENTERO");
+                        } else {
+                            declaredVariables.put(varName, "ENTERO"); // Por defecto
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean isInSymbolTable(String varName) {
+        for (Simbolo symbol : symbolTable.getSimbolosAsCollection()) {
+            if (symbol.getNombre().equals(varName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void addPrintNumberFunction() {
         textSection.append("print_number:\n");
+        textSection.append("    ; Convierte el número en eax a string e imprime\n");
         textSection.append("    push rbx\n");
         textSection.append("    push rcx\n");
         textSection.append("    push rdx\n");
         textSection.append("    push rsi\n");
-        textSection.append("    mov ebx, 10\n");
-        textSection.append("    mov ecx, 0\n");
-        textSection.append("    mov rsi, buffer + 11\n");
-        textSection.append("    mov byte [rsi], 0\n");
+        textSection.append("    \n");
+        textSection.append("    mov ebx, 10          ; Divisor\n");
+        textSection.append("    mov ecx, 0           ; Contador de dígitos\n");
+        textSection.append("    mov rsi, buffer + 11 ; Apuntar al final del buffer\n");
+        textSection.append("    mov byte [rsi], 0    ; Null terminator\n");
+        textSection.append("    \n");
+        textSection.append("    ; Caso especial para 0\n");
         textSection.append("    cmp eax, 0\n");
         textSection.append("    jne convert_loop\n");
         textSection.append("    dec rsi\n");
         textSection.append("    mov byte [rsi], '0'\n");
         textSection.append("    inc ecx\n");
         textSection.append("    jmp print_it\n");
+        textSection.append("    \n");
         textSection.append("convert_loop:\n");
         textSection.append("    cmp eax, 0\n");
         textSection.append("    je print_it\n");
-        textSection.append("    xor edx, edx\n");
-        textSection.append("    div ebx\n");
-        textSection.append("    add dl, '0'\n");
-        textSection.append("    dec rsi\n");
-        textSection.append("    mov [rsi], dl\n");
-        textSection.append("    inc ecx\n");
+        textSection.append("    xor edx, edx         ; Limpiar edx para división\n");
+        textSection.append("    div ebx              ; eax / 10, residuo en edx\n");
+        textSection.append("    add dl, '0'          ; Convertir dígito a ASCII\n");
+        textSection.append("    dec rsi              ; Retroceder en buffer\n");
+        textSection.append("    mov [rsi], dl        ; Almacenar dígito\n");
+        textSection.append("    inc ecx              ; Incrementar contador\n");
         textSection.append("    jmp convert_loop\n");
+        textSection.append("    \n");
         textSection.append("print_it:\n");
-        textSection.append("    mov rax, 1\n");
-        textSection.append("    mov rdi, 1\n");
-        textSection.append("    mov rdx, rcx\n");
+        textSection.append("    mov rax, 1           ; sys_write\n");
+        textSection.append("    mov rdi, 1           ; stdout\n");
+        textSection.append("    mov rdx, rcx         ; longitud\n");
         textSection.append("    syscall\n");
+        textSection.append("    \n");
         textSection.append("    pop rsi\n");
         textSection.append("    pop rdx\n");
         textSection.append("    pop rcx\n");
@@ -105,7 +180,7 @@ public class AssemblyGenerator {
     }
 
     private void processLine(String line) {
-        if (line.isEmpty())
+        if (line.isEmpty() || line.equals("END"))
             return;
 
         String[] parts = line.split(" ");
@@ -114,7 +189,7 @@ public class AssemblyGenerator {
 
         // Manejar declaraciones
         if (parts[0].equals("DECLARE")) {
-            // Ya se procesaron en la sección .data
+            // Ya se procesaron en detectVariables()
             return;
         }
 
@@ -140,10 +215,6 @@ public class AssemblyGenerator {
         else if (parts[0].equals("GOTO")) {
             handleGoto(line);
         }
-        // Manejar END
-        else if (parts[0].equals("END")) {
-            // No necesita acción especial, el programa termina naturalmente
-        }
     }
 
     private void handleAssignment(String line) {
@@ -154,26 +225,43 @@ public class AssemblyGenerator {
         String dest = parts[0].trim();
         String source = parts[1].trim();
 
+        textSection.append(String.format("    ; %s = %s\n", dest, source));
+
         // Si la fuente es una variable temporal, usar su valor conocido
         if (tempVarValues.containsKey(source)) {
             source = tempVarValues.get(source);
         }
 
         // Si el destino es una variable temporal, almacenar su valor
-        if (source.matches("\\d+")) { // Es un número
+        if (isNumeric(source)) {
+            // Es un número
             tempVarValues.put(dest, source);
 
             // Si también es una variable declarada, generar código assembly
-            if (isVariableDeclared(dest)) {
+            if (isVariableDeclaredAnywhere(dest)) {
                 textSection.append(String.format("    mov dword [%s], %s\n", dest, source));
+            }
+        } else if (source.equalsIgnoreCase("TRUE")) {
+            // Booleano TRUE
+            tempVarValues.put(dest, "1");
+            if (isVariableDeclaredAnywhere(dest)) {
+                textSection.append(String.format("    mov dword [%s], 1\n", dest));
+            }
+        } else if (source.equalsIgnoreCase("FALSE")) {
+            // Booleano FALSE
+            tempVarValues.put(dest, "0");
+            if (isVariableDeclaredAnywhere(dest)) {
+                textSection.append(String.format("    mov dword [%s], 0\n", dest));
             }
         } else {
             // Es una variable
-            if (isVariableDeclared(source)) {
+            if (isVariableDeclaredAnywhere(source)) {
                 textSection.append(String.format("    mov eax, [%s]\n", source));
-                if (isVariableDeclared(dest)) {
+                if (isVariableDeclaredAnywhere(dest)) {
                     textSection.append(String.format("    mov [%s], eax\n", dest));
                 }
+                // Almacenar en tempVarValues como referencia a variable
+                tempVarValues.put(dest, source);
             }
         }
     }
@@ -181,17 +269,30 @@ public class AssemblyGenerator {
     private void handlePrint(String line) {
         // PRINT "texto", variable, "más texto"
         String content = line.substring(5).trim(); // Quitar "PRINT"
+        textSection.append(String.format("    ; PRINT %s\n", content));
+
+        // Si la línea está vacía después de quitar PRINT, salir
+        if (content.isEmpty()) {
+            return;
+        }
 
         // Dividir por comas pero preservar las comillas
         List<String> items = parseCommaSeparated(content);
 
+        // Si no hay items, intentar procesar la línea completa como un solo item
+        if (items.isEmpty()) {
+            items.add(content);
+        }
+
         for (String item : items) {
             item = item.trim();
+            if (item.isEmpty())
+                continue;
+
             if (item.startsWith("\"") && item.endsWith("\"")) {
                 // Es un literal de cadena
-                String literal = item;
-                String label = getStringLiteralLabel(literal);
-                int length = literal.length() - 2; // Quitar las comillas
+                String label = getStringLiteralLabel(item);
+                int length = item.length() - 2; // Quitar las comillas
                 textSection.append("    mov rax, 1\n");
                 textSection.append("    mov rdi, 1\n");
                 textSection.append(String.format("    mov rsi, %s\n", label));
@@ -201,22 +302,89 @@ public class AssemblyGenerator {
                 // Es un número literal
                 textSection.append(String.format("    mov eax, %s\n", item));
                 textSection.append("    call print_number\n");
+            } else if (item.equalsIgnoreCase("TRUE")) {
+                // Booleano TRUE - imprimir "TRUE"
+                String trueLabel = getStringLiteralLabel("\"TRUE\"");
+                textSection.append("    mov rax, 1\n");
+                textSection.append("    mov rdi, 1\n");
+                textSection.append(String.format("    mov rsi, %s\n", trueLabel));
+                textSection.append("    mov rdx, 4\n");
+                textSection.append("    syscall\n");
+            } else if (item.equalsIgnoreCase("FALSE")) {
+                // Booleano FALSE - imprimir "FALSE"
+                String falseLabel = getStringLiteralLabel("\"FALSE\"");
+                textSection.append("    mov rax, 1\n");
+                textSection.append("    mov rdi, 1\n");
+                textSection.append(String.format("    mov rsi, %s\n", falseLabel));
+                textSection.append("    mov rdx, 5\n");
+                textSection.append("    syscall\n");
             } else {
                 // Es una variable o temporal
                 String value = tempVarValues.get(item);
-                if (value != null && isNumeric(value)) {
-                    // Variable temporal con valor conocido
-                    textSection.append(String.format("    mov eax, %s\n", value));
-                    textSection.append("    call print_number\n");
-                } else if (isVariableDeclared(item)) {
+                if (value != null) {
+                    if (isNumeric(value)) {
+                        // Variable temporal con valor numérico conocido
+                        textSection.append(String.format("    mov eax, %s\n", value));
+                        textSection.append("    call print_number\n");
+                    } else if (value.equals("1")) {
+                        // Booleano TRUE
+                        String trueLabel = getStringLiteralLabel("\"TRUE\"");
+                        textSection.append("    mov rax, 1\n");
+                        textSection.append("    mov rdi, 1\n");
+                        textSection.append(String.format("    mov rsi, %s\n", trueLabel));
+                        textSection.append("    mov rdx, 4\n");
+                        textSection.append("    syscall\n");
+                    } else if (value.equals("0")) {
+                        // Booleano FALSE
+                        String falseLabel = getStringLiteralLabel("\"FALSE\"");
+                        textSection.append("    mov rax, 1\n");
+                        textSection.append("    mov rdi, 1\n");
+                        textSection.append(String.format("    mov rsi, %s\n", falseLabel));
+                        textSection.append("    mov rdx, 5\n");
+                        textSection.append("    syscall\n");
+                    } else if (isVariableDeclaredAnywhere(value)) {
+                        // Referencia a otra variable
+                        textSection.append(String.format("    mov eax, [%s]\n", value));
+                        textSection.append("    call print_number\n");
+                    }
+                } else if (isVariableDeclaredAnywhere(item)) {
                     // Variable declarada
-                    textSection.append(String.format("    mov eax, [%s]\n", item));
-                    textSection.append("    call print_number\n");
+                    String varType = getVariableType(item);
+                    if (varType != null && (varType.equals("BOOLEAN") || varType.equals("Boolean"))) {
+                        // Variable booleana - verificar valor y imprimir TRUE/FALSE
+                        String trueLabel = getStringLiteralLabel("\"TRUE\"");
+                        String falseLabel = getStringLiteralLabel("\"FALSE\"");
+                        String skipLabel = "skip_" + stringLiteralCounter++;
+
+                        textSection.append(String.format("    mov eax, [%s]\n", item));
+                        textSection.append("    cmp eax, 0\n");
+                        textSection.append(String.format("    je print_false_%s\n", skipLabel));
+                        textSection.append("    mov rax, 1\n");
+                        textSection.append("    mov rdi, 1\n");
+                        textSection.append(String.format("    mov rsi, %s\n", trueLabel));
+                        textSection.append("    mov rdx, 4\n");
+                        textSection.append("    syscall\n");
+                        textSection.append(String.format("    jmp %s\n", skipLabel));
+                        textSection.append(String.format("print_false_%s:\n", skipLabel));
+                        textSection.append("    mov rax, 1\n");
+                        textSection.append("    mov rdi, 1\n");
+                        textSection.append(String.format("    mov rsi, %s\n", falseLabel));
+                        textSection.append("    mov rdx, 5\n");
+                        textSection.append("    syscall\n");
+                        textSection.append(String.format("%s:\n", skipLabel));
+                    } else {
+                        // Variable entera
+                        textSection.append(String.format("    mov eax, [%s]\n", item));
+                        textSection.append("    call print_number\n");
+                    }
+                } else {
+                    // Si no se reconoce el item, agregarlo como comentario
+                    textSection.append(String.format("    ; Item no reconocido: %s\n", item));
                 }
             }
         }
 
-        // Imprimir nueva línea
+        // Imprimir nueva línea al final
         textSection.append("    mov rax, 1\n");
         textSection.append("    mov rdi, 1\n");
         textSection.append("    mov rsi, newline\n");
@@ -231,6 +399,8 @@ public class AssemblyGenerator {
             String condition = parts[1];
             String label = parts[3];
 
+            textSection.append(String.format("    ; IF %s GOTO %s\n", condition, label));
+
             // Evaluar la condición
             String value = tempVarValues.get(condition);
             if (value != null) {
@@ -239,8 +409,9 @@ public class AssemblyGenerator {
                     textSection.append(String.format("    jmp %s\n", label));
                 } else {
                     // Condición siempre falsa - no generar salto
+                    textSection.append("    ; Condición siempre falsa - no salto\n");
                 }
-            } else if (isVariableDeclared(condition)) {
+            } else if (isVariableDeclaredAnywhere(condition)) {
                 // Variable declarada - verificar en tiempo de ejecución
                 textSection.append(String.format("    mov eax, [%s]\n", condition));
                 textSection.append("    cmp eax, 0\n");
@@ -254,6 +425,7 @@ public class AssemblyGenerator {
         String[] parts = line.split(" ");
         if (parts.length >= 2) {
             String label = parts[1];
+            textSection.append(String.format("    ; GOTO %s\n", label));
             textSection.append(String.format("    jmp %s\n", label));
         }
     }
@@ -269,15 +441,19 @@ public class AssemblyGenerator {
                 inQuotes = !inQuotes;
                 current.append(c);
             } else if (c == ',' && !inQuotes) {
-                items.add(current.toString().trim());
+                String item = current.toString().trim();
+                if (!item.isEmpty()) {
+                    items.add(item);
+                }
                 current = new StringBuilder();
             } else {
                 current.append(c);
             }
         }
 
-        if (current.length() > 0) {
-            items.add(current.toString().trim());
+        String lastItem = current.toString().trim();
+        if (!lastItem.isEmpty()) {
+            items.add(lastItem);
         }
 
         return items;
@@ -303,12 +479,34 @@ public class AssemblyGenerator {
         }
     }
 
-    private boolean isVariableDeclared(String varName) {
+    private boolean isVariableDeclaredAnywhere(String varName) {
+        // Verificar en tabla de símbolos
         for (Simbolo symbol : symbolTable.getSimbolosAsCollection()) {
             if (symbol.getNombre().equals(varName)) {
                 return true;
             }
         }
-        return false;
+        // Verificar en variables detectadas
+        return declaredVariables.containsKey(varName);
+    }
+
+    private String getVariableType(String varName) {
+        // Verificar en tabla de símbolos primero
+        for (Simbolo symbol : symbolTable.getSimbolosAsCollection()) {
+            if (symbol.getNombre().equals(varName)) {
+                return symbol.getTipo();
+            }
+        }
+        // Verificar en variables detectadas
+        return declaredVariables.get(varName);
+    }
+
+    private Simbolo getSymbol(String varName) {
+        for (Simbolo symbol : symbolTable.getSimbolosAsCollection()) {
+            if (symbol.getNombre().equals(varName)) {
+                return symbol;
+            }
+        }
+        return null;
     }
 }
